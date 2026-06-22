@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safarilink HR Policy Infrastructure Tool</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <header class="bg-sky-900 text-white shadow-md px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <i data-lucide="plane-takeoff" class="w-8 h-8 text-sky-400"></i>
+            <div>
+                <h1 class="text-xl font-bold tracking-wide">Safarilink</h1>
+                <p class="text-xs text-sky-200">HR Compliance & Policy Portal</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-4">
+            <div class="flex bg-sky-950 rounded-lg p-1 text-sm border border-sky-800">
+                <button id="setStaffBtn" onclick="switchRole('staff')" class="px-4 py-1.5 rounded-md font-medium transition-all duration-200 bg-sky-600 text-white shadow-sm">
+                    Staff View
+                </button>
+                <button id="setAdminBtn" onclick="switchRole('admin')" class="px-4 py-1.5 rounded-md font-medium transition-all duration-200 text-sky-300 hover:text-white">
+                    Admin View
+                </button>
+            </div>
+            
+            <div class="flex items-center space-x-2 border-l border-sky-800 pl-4">
+                <div id="userAvatar" class="w-8 h-8 rounded-full bg-sky-700 flex items-center justify-center font-bold text-sm text-sky-200">
+                    ST
+                </div>
+                <div class="text-xs">
+                    <p id="currentUserName" class="font-semibold">Standard Staff</p>
+                    <p id="currentUserRole" class="text-sky-300 capitalize">Employee</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div id="loginModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden backdrop-blur-xs">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border border-slate-100">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="lock" class="w-5 h-5 text-sky-600"></i> Admin Authentication
+                </h3>
+                <button onclick="closeLoginModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Username</label>
+                    <input type="text" id="adminUser" class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500" value="admin">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Password</label>
+                    <input type="password" id="adminPass" class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500" placeholder="••••">
+                </div>
+                <p id="loginError" class="text-red-500 text-xs hidden font-medium">Invalid credentials. Hint: admin / 1234</p>
+                <button onclick="attemptAdminLogin()" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 rounded-lg transition-colors shadow-xs">
+                    Verify & Login
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <main class="flex-1 flex max-w-[1600px] w-full mx-auto p-6 gap-6">
+        
+        <aside class="w-1/4 min-w-[280px] bg-white rounded-xl shadow-xs border border-slate-200 p-4 flex flex-col">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
+                <h2 class="font-bold text-slate-900 text-sm tracking-wide uppercase flex items-center gap-2">
+                    <i data-lucide="book-open" class="w-4 h-4 text-sky-600"></i> Policy Manuals
+                </h2>
+                <button id="createNewDocBtn" onclick="openNewDocModal()" class="hidden bg-sky-50 hover:bg-sky-100 text-sky-700 p-1.5 rounded-lg border border-sky-200 transition-colors" title="Create New Document">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+            </div>
+            
+            <div id="documentList" class="space-y-1.5 overflow-y-auto flex-1 max-h-[calc(100vh-220px)]">
+                </div>
+        </aside>
+
+        <section class="flex-1 flex flex-col gap-6">
+            
+            <div id="adminDashboard" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-4">
+                    <div class="p-3 bg-sky-50 rounded-lg text-sky-600"><i data-lucide="files" class="w-6 h-6"></i></div>
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Policies</p>
+                        <h4 id="statTotalDocs" class="text-2xl font-bold text-slate-800">0</h4>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-4">
+                    <div class="p-3 bg-emerald-50 rounded-lg text-emerald-600"><i data-lucide="users" class="w-6 h-6"></i></div>
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Tracked Staff</p>
+                        <h4 id="statTotalStaff" class="text-2xl font-bold text-slate-800">4</h4>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-4">
+                    <div class="p-3 bg-amber-50 rounded-lg text-amber-600"><i data-lucide="activity" class="w-6 h-6"></i></div>
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Overall Completion</p>
+                        <h4 id="statCompletionRate" class="text-2xl font-bold text-slate-800">0%</h4>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white flex-1 rounded-xl shadow-xs border border-slate-200 flex flex-col min-h-[500px]">
+                
+                <div id="contentHeader" class="border-b border-slate-200 p-5 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                    <div>
+                        <h2 id="activeDocTitle" class="text-xl font-bold text-slate-900">Select a policy document</h2>
+                        <p id="activeDocMeta" class="text-xs text-slate-500 mt-0.5">Choose from the left panel to begin reading or managing data structures.</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="addSectionBtn" onclick="openNewSectionModal()" class="hidden bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 text-sm rounded-lg font-medium transition-colors flex items-center gap-1.5 shadow-xs">
+                            <i data-lucide="list-plus" class="w-4 h-4"></i> Add Section
+                        </button>
+                        <button id="viewReportsBtn" onclick="toggleReportsView()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 text-sm rounded-lg font-medium border border-slate-200 transition-colors flex items-center gap-1.5">
+                            <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Analytics View
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 p-6 overflow-y-auto max-h-[calc(100vh-280px)]" id="workspaceContainer">
+                    
+                    <div id="documentReaderFrame" class="space-y-6">
+                        <div class="text-center py-16 text-slate-400" id="emptyStatePlaceholder">
+                            <i data-lucide="book-marked" class="w-16 h-16 mx-auto mb-3 opacity-40"></i>
+                            <p class="font-medium">No active document selection framework running.</p>
+                        </div>
+                        </div>
+
+                    <div id="adminReportsFrame" class="hidden space-y-6">
+                        <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="pie-chart" class="w-5 h-5 text-sky-600"></i> Compliance Breakdown Report
+                        </h3>
+                        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                            <table class="w-full text-left border-collapse bg-white">
+                                <thead>
+                                    <tr class="bg-slate-50 text-slate-400 font-semibold text-xs tracking-wider border-b border-slate-200 uppercase">
+                                        <th class="p-4">Staff Member</th>
+                                        <th class="p-4">Document</th>
+                                        <th class="p-4">Progress Vector</th>
+                                        <th class="p-4">Completed Sections</th>
+                                        <th class="p-4">Status Class</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reportTableBody" class="text-sm text-slate-700 divide-y divide-slate-100">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="newDocModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden backdrop-blur-xs">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border border-slate-100">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-900">Create Compliance Framework Document</h3>
+                <button onclick="closeModal('newDocModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Document Title</label>
+                    <input type="text" id="docTitleInput" class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm" placeholder="e.g., Flight Crew Operational Guidelines">
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button onclick="closeModal('newDocModal')" class="px-4 py-2 text-sm text-slate-500 font-medium hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
+                    <button onclick="saveNewDocument()" class="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-700 text-white font-medium rounded-lg transition-colors shadow-xs">Save Document</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="newSectionModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden backdrop-blur-xs">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 border border-slate-100">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-900">Add Functional Section Block</h3>
+                <button onclick="closeModal('newSectionModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Section Header / Title</label>
+                    <input type="text" id="sectionTitleInput" class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm" placeholder="e.g., Section 1.4: Emergency Cockpit Protocols">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Markdown / HTML Section Content Structure</label>
+                    <textarea id="sectionContentInput" rows="8" class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm font-mono" placeholder="<p>This is a standard paragraph.</p>&#10;<strong>This text is heavily bolded.</strong>&#10;<h3>Sub-Heading Block</h3>"></textarea>
+                    <p class="text-[11px] text-slate-400 mt-1">Supports explicit markup blocks seamlessly (e.g., &lt;p&gt;, &lt;strong&gt;, &lt;h3&gt;, &lt;ul&gt;).</p>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button onclick="closeModal('newSectionModal')" class="px-4 py-2 text-sm text-slate-500 font-medium hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
+                    <button onclick="saveNewSection()" class="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-700 text-white font-medium rounded-lg transition-colors shadow-xs">Inject Section Block</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Seed Mock Data Structs
+        const defaultDocuments = [
+            {
+                id: "doc-1",
+                title: "Safarilink Ground Operations Policy",
+                sections: [
+                    { id: "sec-1-1", title: "1.1 Ramp Safety Standards", content: "<p>All ground staff must wear high-visibility vests and steel-toed boots inside active line parameters.</p><p><strong>Zero-tolerance restriction:</strong> Mobile devices are forbidden during fueling matrices.</p>" },
+                    { id: "sec-1-2", title: "1.2 Dangerous Goods Handling", content: "<p>Lithium-ion arrays must meet standard IATA criteria before loading initialization procedures execute.</p>" }
+                ]
+            },
+            {
+                id: "doc-2",
+                title: "In-Flight Cabin Crew Procedures",
+                sections: [
+                    { id: "sec-2-1", title: "2.1 Pre-Flight Briefing Protocol", content: "<p>Cabin configurations require comprehensive audits prior to passenger ingress. Ensure checklists lock down cleanly.</p>" }
+                ]
+            }
+        ];
+
+        const mockStaff = [
+            { id: "usr-01", name: "Captain Joseph Kiprop", role: "Flight Operations" },
+            { id: "usr-02", name: "Aminah Omondi", role: "Cabin Crew Lead" },
+            { id: "usr-03", name: "Michael Wafula", role: "Ramp Handling" },
+            { id: "usr-04", name: "Q / Qua$$a", role: "DevOps & Core Infra" }
+        ];
+
+        // System Application State Variables
+        let systemState = {
+            currentRole: "staff", // "staff" or "admin"
+            activeUserId: "usr-04", // Pointed directly to Q for local scope testing
+            activeDocId: null,
+            viewingReports: false,
+            documents: [],
+            readingTracking: {} // Map structure: { "userId_sectionId": true }
+        };
+
+        // System Setup Engine
+        window.addEventListener('DOMContentLoaded', () => {
+            initStorageEngine();
+            renderDocumentNavigation();
+            refreshRoleUIProperties();
+            lucide.createIcons();
+        });
+
+        function initStorageEngine() {
+            if (!localStorage.getItem('sf_docs')) {
+                localStorage.setItem('sf_docs', JSON.stringify(defaultDocuments));
+            }
+            if (!localStorage.getItem('sf_tracking')) {
+                localStorage.setItem('sf_tracking', JSON.stringify({}));
+            }
+            systemState.documents = JSON.parse(localStorage.getItem('sf_docs'));
+            systemState.readingTracking = JSON.parse(localStorage.getItem('sf_tracking'));
+        }
+
+        function persistStorageState() {
+            localStorage.setItem('sf_docs', JSON.stringify(systemState.documents));
+            localStorage.setItem('sf_tracking', JSON.stringify(systemState.readingTracking));
+            calculateAnalyticsEngineStats();
+        }
+
+        // Navigation Render Pipeline
+        function renderDocumentNavigation() {
+            const container = document.getElementById('documentList');
+            container.innerHTML = '';
+
+            systemState.documents.forEach(doc => {
+                const totalSec = doc.sections.length;
+                let readSec = 0;
+                
+                doc.sections.forEach(s => {
+                    if (systemState.readingTracking[`${systemState.activeUserId}_${s.id}`]) readSec++;
+                });
+
+                const progressPercentage = totalSec > 0 ? Math.round((readSec / totalSec) * 100) : 0;
+                const isActive = systemState.activeDocId === doc.id;
+
+                const wrapperNode = document.createElement('button');
+                wrapperNode.className = `w-full text-left p-3 rounded-lg border transition-all flex flex-col gap-1.5 ${
+                    isActive 
+                    ? 'bg-sky-50 border-sky-300 text-sky-950 font-medium ring-1 ring-sky-300' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`;
+                wrapperNode.onclick = () => selectDocumentContext(doc.id);
+
+                wrapperNode.innerHTML = `
+                    <div class="flex justify-between items-start w-full">
+                        <span class="text-sm font-semibold pr-2 leading-tight">${doc.title}</span>
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 shrink-0 mt-0.5"></i>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
+                        <div class="bg-sky-600 h-1.5 rounded-full transition-all duration-300" style="width: ${progressPercentage}%"></div>
+                    </div>
+                    <div class="flex justify-between items-center text-[11px] text-slate-400 w-full font-normal">
+                        <span>${totalSec} section${totalSec !== 1 ? 's' : ''}</span>
+                        <span class="font-medium text-slate-500">${progressPercentage}% Read</span>
+                    </div>
+                `;
+                container.appendChild(wrapperNode);
+            });
+            lucide.createIcons();
+        }
+
+        // Active State Document Selection Loader
+        function selectDocumentContext(docId) {
+            systemState.activeDocId = docId;
+            systemState.viewingReports = false;
+            
+            document.getElementById('emptyStatePlaceholder')?.classList.add('hidden');
+            document.getElementById('documentReaderFrame').classList.remove('hidden');
+            document.getElementById('adminReportsFrame').classList.add('hidden');
+
+            renderDocumentNavigation();
+            renderActiveDocumentContent();
+        }
+
+        function renderActiveDocumentContent() {
+            const doc = systemState.documents.find(d => d.id === systemState.activeDocId);
+            if (!doc) return;
+
+            document.getElementById('activeDocTitle').innerText = doc.title;
+            
+            let totalSec = doc.sections.length;
+            let readSec = 0;
+            doc.sections.forEach(s => {
+                if (systemState.readingTracking[`${systemState.activeUserId}_${s.id}`]) readSec++;
+            });
+            document.getElementById('activeDocMeta').innerText = `Active Tracker Scope: Managed with ${readSec} of ${totalSec} elements processed.`;
+
+            const frame = document.getElementById('documentReaderFrame');
+            frame.innerHTML = '';
+
+            if (doc.sections.length === 0) {
+                frame.innerHTML = `
+                    <div class="text-center py-12 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
+                        <i data-lucide="folder-open" class="w-12 h-12 mx-auto mb-2 opacity-40"></i>
+                        <p class="text-sm">This compliance framework contains no section records yet.</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            doc.sections.forEach(sec => {
+                const isRead = systemState.readingTracking[`${systemState.activeUserId}_${sec.id}`];
+                const sectionCard = document.createElement('div');
+                sectionCard.className = `p-5 rounded-xl border transition-all duration-200 bg-white ${
+                    isRead ? 'border-emerald-200 bg-emerald-50/10' : 'border-slate-200 shadow-xs'
+                }`;
+
+                sectionCard.innerHTML = `
+                    <div class="flex justify-between items-start gap-4 mb-3 pb-2 border-b border-slate-100">
+                        <h3 class="text-base font-bold text-slate-900">${sec.title}</h3>
+                        ${
+                            systemState.currentRole === 'staff'
+                            ? `<button onclick="toggleSectionReadStatus('${sec.id}')" class="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                isRead 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                : 'bg-slate-100 hover:bg-sky-100 hover:text-sky-800 text-slate-600 border border-slate-300'
+                              }">
+                                <i data-lucide="${isRead ? 'check-circle-2' : 'circle'}" class="w-4 h-4"></i>
+                                ${isRead ? 'Completed' : 'Mark as Read'}
+                              </button>`
+                            : `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">Admin Read-Only</span>`
+                        }
+                    </div>
+                    <div class="prose prose-slate max-w-none text-sm text-slate-600 leading-relaxed space-y-2">
+                        ${sec.content}
+                    </div>
+                `;
+                frame.appendChild(sectionCard);
+            });
+            lucide.createIcons();
+        }
+
+        // Progress Toggler for Staff Users
+        function toggleSectionReadStatus(sectionId) {
+            const key = `${systemState.activeUserId}_${sectionId}`;
+            if (systemState.readingTracking[key]) {
+                delete systemState.readingTracking[key];
+            } else {
+                systemState.readingTracking[key] = true;
+            }
+            persistStorageState();
+            renderActiveDocumentContent();
+            renderDocumentNavigation();
+        }
+
+        // Role Toggle System Flow Rules
+        function switchRole(targetRole) {
+            if (targetRole === 'admin' && systemState.currentRole !== 'admin') {
+                document.getElementById('loginModal').classList.remove('hidden');
+            } else if (targetRole === 'staff') {
+                systemState.currentRole = 'staff';
+                systemState.viewingReports = false;
+                refreshRoleUIProperties();
+                if (systemState.activeDocId) {
+                    renderActiveDocumentContent();
+                }
+                renderDocumentNavigation();
+            }
+        }
+
+        function attemptAdminLogin() {
+            const u = document.getElementById('adminUser').value;
+            const p = document.getElementById('adminPass').value;
+            if (u === 'admin' && p === '1234') {
+                systemState.currentRole = 'admin';
+                closeLoginModal();
+                refreshRoleUIProperties();
+                if (systemState.activeDocId) {
+                    renderActiveDocumentContent();
+                }
+                renderDocumentNavigation();
+            } else {
+                const err = document.getElementById('loginError');
+                err.classList.remove('hidden');
+                setTimeout(() => err.classList.add('hidden'), 4000);
+            }
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+            document.getElementById('adminPass').value = '';
+        }
+
+        function refreshRoleUIProperties() {
+            const isA = systemState.currentRole === 'admin';
+            
+            // Buttons navigation mutations
+            const sBtn = document.getElementById('setStaffBtn');
+            const aBtn = document.getElementById('setAdminBtn');
+            
+            if (isA) {
+                aBtn.className = "px-4 py-1.5 rounded-md font-medium transition-all duration-200 bg-sky-600 text-white shadow-sm";
+                sBtn.className = "px-4 py-1.5 rounded-md font-medium transition-all duration-200 text-sky-300 hover:text-white";
+                
+                document.getElementById('userAvatar').innerText = "AD";
+                document.getElementById('userAvatar').className = "w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center font-bold text-sm text-amber-100";
+                document.getElementById('currentUserName').innerText = "Administrator Mode";
+                document.getElementById('currentUserRole').innerText = "Security Master";
+                
+                // Show Admin Controls
+                document.getElementById('createNewDocBtn').classList.remove('hidden');
+                document.getElementById('addSectionBtn').classList.remove('hidden');
+                document.getElementById('viewReportsBtn').classList.remove('hidden');
+                document.getElementById('adminDashboard').classList.remove('hidden');
+                calculateAnalyticsEngineStats();
+            } else {
+                sBtn.className = "px-4 py-1.5 rounded-md font-medium transition-all duration-200 bg-sky-600 text-white shadow-sm";
+                aBtn.className = "px-4 py-1.5 rounded-md font-medium transition-all duration-200 text-sky-300 hover:text-white";
+                
+                document.getElementById('userAvatar').innerText = "Q";
+                document.getElementById('userAvatar').className = "w-8 h-8 rounded-full bg-sky-700 flex items-center justify-center font-bold text-sm text-sky-200";
+                document.getElementById('currentUserName').innerText = "Q / Qua$$a";
+                document.getElementById('currentUserRole').innerText = "DevOps Engineer";
+                
+                // Hide Admin Controls
+                document.getElementById('createNewDocBtn').classList.add('hidden');
+                document.getElementById('addSectionBtn').classList.add('hidden');
+                document.getElementById('viewReportsBtn').classList.add('hidden');
+                document.getElementById('adminDashboard').classList.add('hidden');
+                
+                // Revert Workspace Panels
+                document.getElementById('documentReaderFrame').classList.remove('hidden');
+                document.getElementById('adminReportsFrame').classList.add('hidden');
+            }
+        }
+
+        // View Toggler for Compliance Matrix Report
+        function toggleReportsView() {
+            systemState.viewingReports = !systemState.viewingReports;
+            const rFrame = document.getElementById('adminReportsFrame');
+            const dFrame = document.getElementById('documentReaderFrame');
+            const btn = document.getElementById('viewReportsBtn');
+
+            if (systemState.viewingReports) {
+                rFrame.classList.remove('hidden');
+                dFrame.classList.add('hidden');
+                btn.innerHTML = `<i data-lucide="book-open" class="w-4 h-4"></i> Reader View`;
+                renderComplianceMatrixTable();
+            } else {
+                rFrame.classList.add('hidden');
+                dFrame.classList.remove('hidden');
+                btn.innerHTML = `<i data-lucide="bar-chart-3" class="w-4 h-4"></i> Analytics View`;
+                if (systemState.activeDocId) renderActiveDocumentContent();
+            }
+            lucide.createIcons();
+        }
+
+        // Calculation Metric Matrix
+        function calculateAnalyticsEngineStats() {
+            document.getElementById('statTotalDocs').innerText = systemState.documents.length;
+            document.getElementById('statTotalStaff').innerText = mockStaff.length;
+
+            let totalPossibleInteractions = 0;
+            let positiveInteractions = 0;
+
+            systemState.documents.forEach(doc => {
+                const secCount = doc.sections.length;
+                totalPossibleInteractions += (secCount * mockStaff.length);
+                
+                mockStaff.forEach(staff => {
+                    doc.sections.forEach(sec => {
+                        if (systemState.readingTracking[`${staff.id}_${sec.id}`]) positiveInteractions++;
+                    });
+                });
+            });
+
+            const rate = totalPossibleInteractions > 0 ? Math.round((positiveInteractions / totalPossibleInteractions) * 100) : 0;
+            document.getElementById('statCompletionRate').innerText = `${rate}%`;
+        }
+
+        function renderComplianceMatrixTable() {
+            const tbody = document.getElementById('reportTableBody');
+            tbody.innerHTML = '';
+
+            if (systemState.documents.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">No active frameworks verified to track.</td></tr>`;
+                return;
+            }
+
+            systemState.documents.forEach(doc => {
+                const totalSec = doc.sections.length;
+                
+                mockStaff.forEach(staff => {
+                    let readCount = 0;
+                    doc.sections.forEach(sec => {
+                        if (systemState.readingTracking[`${staff.id}_${sec.id}`]) readCount++;
+                    });
+
+                    const percentage = totalSec > 0 ? Math.round((readCount / totalSec) * 100) : 0;
+                    let badgeClass = "bg-red-50 text-red-700 border-red-200";
+                    let statusTxt = "Not Started";
+
+                    if (percentage === 100) {
+                        badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                        statusTxt = "Compliant";
+                    } else if (percentage > 0) {
+                        badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
+                        statusTxt = "In Progress";
+                    }
+
+                    const row = document.createElement('tr');
+                    row.className = "hover:bg-slate-50/80 transition-colors";
+                    row.innerHTML = `
+                        <td class="p-4 font-semibold text-slate-900">${staff.name}<br><span class="text-xs text-slate-400 font-normal">${staff.role}</span></td>
+                        <td class="p-4 text-slate-600 font-medium">${doc.title}</td>
+                        <td class="p-4">
+                            <div class="w-32 bg-slate-100 rounded-full h-2 overflow-hidden">
+                                <div class="bg-sky-600 h-2 rounded-full" style="width: ${percentage}%"></div>
+                            </div>
+                        </td>
+                        <td class="p-4 font-mono text-xs text-slate-500">${readCount} / ${totalSec} items</td>
+                        <td class="p-4"><span class="px-2.5 py-1 text-xs font-bold rounded-lg border ${badgeClass}">${statusTxt} (${percentage}%)</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            });
+        }
+
+        // Modal Management Engine
+        function openNewDocModal() { document.getElementById('newDocModal').classList.remove('hidden'); }
+        function openNewSectionModal() {
+            if (!systemState.activeDocId) {
+                alert("Please initialize or select a Policy Manual tracking context first.");
+                return;
+            }
+            document.getElementById('newSectionModal').classList.remove('hidden');
+        }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        // Persistent Injection Logic Elements
+        function saveNewDocument() {
+            const titleInput = document.getElementById('docTitleInput');
+            if (!titleInput.value.trim()) return;
+
+            const newDoc = {
+                id: `doc-${Date.now()}`,
+                title: titleInput.value.trim(),
+                sections: []
+            };
+
+            systemState.documents.push(newDoc);
+            persistStorageState();
+            renderDocumentNavigation();
+            
+            titleInput.value = '';
+            closeModal('newDocModal');
+            selectDocumentContext(newDoc.id);
+        }
+
+        function saveNewSection() {
+            const titleInput = document.getElementById('sectionTitleInput');
+            const contentInput = document.getElementById('sectionContentInput');
+
+            if (!titleInput.value.trim() || !contentInput.value.trim()) return;
+
+            const docIndex = systemState.documents.findIndex(d => d.id === systemState.activeDocId);
+            if (docIndex === -1) return;
+
+            const newSection = {
+                id: `sec-${Date.now()}`,
+                title: titleInput.value.trim(),
+                content: contentInput.value.trim() // Native HTML processing block
+            };
+
+            systemState.documents[docIndex].sections.push(newSection);
+            persistStorageState();
+            
+            titleInput.value = '';
+            contentInput.value = '';
+            closeModal('newSectionModal');
+            renderActiveDocumentContent();
+            renderDocumentNavigation();
+        }
+    </script>
+</body>
+</html>
