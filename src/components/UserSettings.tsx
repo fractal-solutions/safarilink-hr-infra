@@ -34,24 +34,25 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
 
   const load = async () => {
     const { getAllUsers } = await import("@/auth");
-    setUsers(getAllUsers());
+    const list = await getAllUsers();
+    setUsers(list);
   };
 
   const handleElevate = async (userId: string) => {
     const { elevateUser } = await import("@/auth");
-    elevateUser(userId);
+    await elevateUser(userId);
     load();
   };
 
   const handleDemote = async (userId: string) => {
     const { demoteUser } = await import("@/auth");
-    demoteUser(userId);
+    await demoteUser(userId);
     load();
   };
 
   const handleDelete = async (userId: string) => {
     const { deleteUser } = await import("@/auth");
-    deleteUser(userId);
+    await deleteUser(userId);
     setConfirmDelete(null);
     load();
   };
@@ -63,7 +64,7 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
       return;
     }
     const { changePassword } = await import("@/auth");
-    const result = changePassword(userId, newPassword);
+    const result = await changePassword(userId, newPassword);
     if (result.ok) {
       setEditingPassword(null);
       setNewPassword("");

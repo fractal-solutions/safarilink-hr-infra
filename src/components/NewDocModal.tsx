@@ -1,40 +1,42 @@
 import { X } from "lucide-react";
 import { useState } from "react";
+import { TagsInput } from "./TagsInput";
 
 interface NewDocModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string) => void;
+  onSave: (title: string, dueDate?: string | null, tags?: string[]) => void;
 }
 
 export function NewDocModal({ isOpen, onClose, onSave }: NewDocModalProps) {
   const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
 
   if (!isOpen) return null;
 
   const handleSave = () => {
     if (!title.trim()) return;
-    onSave(title.trim());
+    onSave(title.trim(), dueDate || null, tags);
     setTitle("");
+    setDueDate("");
+    setTags([]);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border border-slate-100">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-slate-100 dark:border-slate-700">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
             Create Compliance Framework Document
           </h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600"
-          >
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
               Document Title
             </label>
             <input
@@ -42,14 +44,31 @@ export function NewDocModal({ isOpen, onClose, onSave }: NewDocModalProps) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSave()}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm"
+              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm"
               placeholder="e.g., Flight Crew Operational Guidelines"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+              Due Date <span className="text-slate-400 dark:text-slate-500 normal-case">(optional)</span>
+            </label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+              Tags <span className="text-slate-400 dark:text-slate-500 normal-case">(optional)</span>
+            </label>
+            <TagsInput tags={tags} onChange={setTags} />
           </div>
           <div className="flex justify-end space-x-2 pt-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm text-slate-500 font-medium hover:bg-slate-50 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400 font-medium hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               Cancel
             </button>

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import type { UserRole, PolicyDocument, User } from "@/types";
-import { loadDocuments, saveDocuments, loadTracking, saveTracking } from "@/store";
+import type { PolicyDocument, User } from "@/types";
+import * as api from "@/api";
 import { getSession, logout } from "@/auth";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
@@ -12,52 +12,81 @@ import { NewDocModal } from "@/components/NewDocModal";
 import { NewSectionModal } from "@/components/NewSectionModal";
 import { EditSectionModal } from "@/components/EditSectionModal";
 import { UserSettings } from "@/components/UserSettings";
-import { ListPlus, BarChart3, BookOpen } from "lucide-react";
+import { ToastProvider, useToast } from "@/components/Toast";
+import { DueDateDashboard } from "@/components/DueDateDashboard";
+import { VersionHistory } from "@/components/VersionHistory";
+import { ImportExport } from "@/components/ImportExport";
+import { ListPlus, BarChart3, BookOpen, Calendar } from "lucide-react";
 
-export function App() {
+function AppInner() {
+  const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [tracking, setTracking] = useState<Record<string, boolean>>({});
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [viewingReports, setViewingReports] = useState(false);
   const [viewingOverallAnalytics, setViewingOverallAnalytics] = useState(false);
+  const [viewingDueDates, setViewingDueDates] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showNewDoc, setShowNewDoc] = useState(false);
   const [showNewSection, setShowNewSection] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sf_dark_mode") === "true";
+    }
+    return false;
+  });
+  const [versionSectionId, setVersionSectionId] = useState<string | null>(null);
+
+  const loadDocs = useCallback(async () => {
+    const docs = await api.getDocuments();
+    setDocuments(docs);
+  }, []);
+
+  const loadTracking = useCallback(async () => {
+    const t = await api.getTracking();
+    setTracking(t);
+  }, []);
 
   useEffect(() => {
-    const session = getSession();
-    if (session) {
-      setUser(session);
-      setDocuments(loadDocuments());
-      setTracking(loadTracking());
-    } else {
-      setShowAuth(true);
-    }
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem("sf_dark_mode", String(isDark));
+  }, [isDark]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const session = await getSession();
+        if (session) {
+          setUser(session);
+          await loadDocs();
+          await loadTracking();
+        } else {
+          setShowAuth(true);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  const persist = useCallback(
-    (docs: PolicyDocument[], track: Record<string, boolean>) => {
-      saveDocuments(docs);
-      saveTracking(track);
-    },
-    []
-  );
-
-  const handleAuth = useCallback(() => {
-    const session = getSession();
+  const handleAuth = useCallback(async () => {
+    const session = await getSession();
     if (session) {
       setUser(session);
-      setDocuments(loadDocuments());
-      setTracking(loadTracking());
+      await loadDocs();
+      await loadTracking();
       setShowAuth(false);
+      toast("Welcome back!", "success");
     }
-  }, []);
+  }, [loadDocs, loadTracking, toast]);
 
-  const handleLogout = useCallback(() => {
-    logout();
+  const handleLogout = useCallback(async () => {
+    await logout();
     setUser(null);
     setActiveDocId(null);
     setViewingReports(false);
@@ -68,58 +97,53 @@ export function App() {
     setActiveDocId(docId);
     setViewingReports(false);
     setViewingOverallAnalytics(false);
+    setViewingDueDates(false);
+    setSearchQuery("");
   }, []);
 
   const handleToggleRead = useCallback(
-    (sectionId: string) => {
+    async (sectionId: string) => {
       if (!user) return;
-      const key = `${user.id}_${sectionId}`;
+      const isRead = !!tracking[sectionId];
+      await api.toggleRead(sectionId, !isRead);
       const next = { ...tracking };
-      if (next[key]) {
-        delete next[key];
+      if (isRead) {
+        delete next[sectionId];
       } else {
-        next[key] = true;
+        next[sectionId] = true;
       }
       setTracking(next);
-      persist(documents, next);
     },
-    [user, tracking, documents, persist]
+    [user, tracking]
   );
 
   const handleCreateDoc = useCallback(
-    (title: string) => {
-      const newDoc: PolicyDocument = {
-        id: `doc-${Date.now()}`,
-        title,
-        sections: [],
-      };
-      const next = [...documents, newDoc];
-      setDocuments(next);
-      persist(next, tracking);
-      setShowNewDoc(false);
-      setActiveDocId(newDoc.id);
+    async (title: string, dueDate?: string | null, tags?: string[]) => {
+      const doc = await api.createDocument(title, dueDate);
+      if (doc) {
+        if (tags && tags.length > 0) {
+          for (const tag of tags) {
+            await api.addTag(doc.id, tag);
+          }
+        }
+        await loadDocs();
+        setShowNewDoc(false);
+        setActiveDocId(doc.id);
+        toast("Document created", "success");
+      }
     },
-    [documents, tracking, persist]
+    [loadDocs, toast]
   );
 
   const handleCreateSection = useCallback(
-    (title: string, content: string) => {
-      const docIndex = documents.findIndex((d) => d.id === activeDocId);
-      if (docIndex === -1) return;
-
-      const newSection = {
-        id: `sec-${Date.now()}`,
-        title,
-        content,
-      };
-      const next = documents.map((d, i) =>
-        i === docIndex ? { ...d, sections: [...d.sections, newSection] } : d
-      );
-      setDocuments(next);
-      persist(next, tracking);
+    async (title: string, content: string) => {
+      if (!activeDocId) return;
+      await api.createSection(activeDocId, title, content);
+      await loadDocs();
       setShowNewSection(false);
+      toast("Section added", "success");
     },
-    [documents, activeDocId, tracking, persist]
+    [activeDocId, loadDocs, toast]
   );
 
   const handleEditSection = useCallback((sectionId: string) => {
@@ -127,34 +151,46 @@ export function App() {
   }, []);
 
   const handleSaveEdit = useCallback(
-    (title: string, content: string) => {
-      if (!editingSectionId || !activeDocId) return;
-      const next = documents.map((doc) => {
-        if (doc.id !== activeDocId) return doc;
-        return {
-          ...doc,
-          sections: doc.sections.map((sec) =>
-            sec.id === editingSectionId ? { ...sec, title, content } : sec
-          ),
-        };
-      });
-      setDocuments(next);
-      persist(next, tracking);
-      setEditingSectionId(null);
+    async (title: string, content: string) => {
+      if (!editingSectionId) return;
+      const ok = await api.updateSection(editingSectionId, { title, content });
+      if (ok) {
+        await loadDocs();
+        setEditingSectionId(null);
+        toast("Section updated", "success");
+      } else {
+        toast("Failed to update section", "error");
+      }
     },
-    [editingSectionId, activeDocId, documents, tracking, persist]
+    [editingSectionId, loadDocs, toast]
   );
 
   const handleReorder = useCallback(
-    (fromIndex: number, toIndex: number) => {
+    async (fromIndex: number, toIndex: number) => {
       const next = [...documents];
       const [moved] = next.splice(fromIndex, 1);
       next.splice(toIndex, 0, moved);
       setDocuments(next);
-      persist(next, tracking);
+      const order = next.map((d, i) => ({ id: d.id, sort_order: i }));
+      await api.reorderDocuments(order);
     },
-    [documents, tracking, persist]
+    [documents]
   );
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <AuthModal isOpen={showAuth} onAuth={handleAuth} />;
@@ -168,7 +204,7 @@ export function App() {
     const total = activeDoc.sections.length;
     let read = 0;
     activeDoc.sections.forEach((s) => {
-      if (tracking[`${user.id}_${s.id}`]) read++;
+      if (tracking[s.id]) read++;
     });
     docMetaText = `Your progress: ${read} of ${total} sections read.`;
   }
@@ -178,14 +214,16 @@ export function App() {
     : null;
 
   const showAnalytics = viewingReports || viewingOverallAnalytics;
-  const analyticsDoc = viewingReports ? activeDoc : null;
 
   return (
-    <div className="bg-slate-50 text-slate-800 font-sans h-screen flex flex-col overflow-hidden">
+    <div className="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans h-screen flex flex-col overflow-hidden">
       <Header
         user={user}
         onLogout={handleLogout}
         onOpenSettings={() => setShowSettings(true)}
+        isDark={isDark}
+        onToggleDark={() => setIsDark((d) => !d)}
+        onSearch={handleSearch}
       />
 
       <AuthModal isOpen={false} onAuth={handleAuth} />
@@ -207,58 +245,87 @@ export function App() {
         initialTitle={editingSection?.title ?? ""}
         initialContent={editingSection?.content ?? ""}
       />
+      {versionSectionId && (
+        <VersionHistory
+          sectionId={versionSectionId}
+          onClose={() => setVersionSectionId(null)}
+        />
+      )}
 
       <main className="flex-1 flex max-w-[1600px] w-full mx-auto p-6 gap-6 overflow-hidden min-h-0">
         <Sidebar
           documents={documents}
-          activeDocId={viewingOverallAnalytics ? null : activeDocId}
+          activeDocId={viewingOverallAnalytics || viewingDueDates ? null : activeDocId}
           currentRole={user.role}
           tracking={tracking}
           activeUserId={user.id}
           onSelectDoc={handleSelectDoc}
           onCreateDoc={() => setShowNewDoc(true)}
           onReorder={handleReorder}
+          searchQuery={searchQuery}
         />
 
         <section className="flex-1 flex flex-col gap-6 min-h-0">
           {isAdmin && (
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <AdminDashboard documents={documents} tracking={tracking} />
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <AdminDashboard documents={documents} />
               </div>
-              <button
-                onClick={() => {
-                  setViewingOverallAnalytics((v) => !v);
-                  setViewingReports(false);
-                }}
-                className={`self-center px-4 py-3 rounded-xl border text-sm font-medium transition-colors flex items-center gap-2 shrink-0 ${
-                  viewingOverallAnalytics
-                    ? "bg-sky-600 text-white border-sky-600"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                <BarChart3 className="w-4 h-4" />
-                {viewingOverallAnalytics ? "Exit Overview" : "Full Analytics"}
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <ImportExport onImportComplete={loadDocs} />
+                <button
+                  onClick={() => {
+                    setViewingDueDates((v) => !v);
+                    setViewingOverallAnalytics(false);
+                    setViewingReports(false);
+                  }}
+                  className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors flex items-center gap-2 ${
+                    viewingDueDates
+                      ? "bg-amber-600 text-white border-amber-600"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  <Calendar className="w-4 h-4" /> Due Dates
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingOverallAnalytics((v) => !v);
+                    setViewingReports(false);
+                    setViewingDueDates(false);
+                  }}
+                  className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors flex items-center gap-2 ${
+                    viewingOverallAnalytics
+                      ? "bg-sky-600 text-white border-sky-600"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  {viewingOverallAnalytics ? "Exit Overview" : "Full Analytics"}
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="bg-white flex-1 rounded-xl shadow-xs border border-slate-200 flex flex-col min-h-0 overflow-hidden">
-            <div className="border-b border-slate-200 p-5 flex justify-between items-center bg-slate-50 rounded-t-xl">
+          <div className="bg-white dark:bg-slate-900 flex-1 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 flex flex-col min-h-0 overflow-hidden">
+            <div className="border-b border-slate-200 dark:border-slate-700 p-5 flex justify-between items-center bg-slate-50 dark:bg-slate-800 rounded-t-xl">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">
-                  {viewingOverallAnalytics
-                    ? "Overall Analytics"
-                    : activeDoc?.title ?? "Select a policy document"}
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                  {viewingDueDates
+                    ? "Due Dates Dashboard"
+                    : viewingOverallAnalytics
+                      ? "Overall Analytics"
+                      : activeDoc?.title ?? "Select a policy document"}
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {viewingOverallAnalytics
-                    ? "Analytics across all policy manuals and users."
-                    : docMetaText}
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {viewingDueDates
+                    ? "Upcoming and overdue compliance deadlines."
+                    : viewingOverallAnalytics
+                      ? "Analytics across all policy manuals and users."
+                      : docMetaText}
                 </p>
               </div>
               <div className="flex items-center space-x-2">
-                {isAdmin && !viewingOverallAnalytics && (
+                {isAdmin && !viewingOverallAnalytics && !viewingDueDates && (
                   <>
                     <button
                       onClick={() => setShowNewSection(true)}
@@ -286,11 +353,13 @@ export function App() {
             </div>
 
             <div className="flex-1 p-6 overflow-y-auto">
-              {showAnalytics && isAdmin ? (
+              {viewingDueDates ? (
+                <DueDateDashboard />
+              ) : showAnalytics && isAdmin ? (
                 <ReportsView
                   documents={documents}
                   tracking={tracking}
-                  filterDocument={analyticsDoc}
+                  filterDocument={viewingReports ? activeDoc : null}
                 />
               ) : (
                 <DocumentReader
@@ -300,6 +369,7 @@ export function App() {
                   activeUserId={user.id}
                   onToggleRead={handleToggleRead}
                   onEditSection={handleEditSection}
+                  onViewVersions={(id) => setVersionSectionId(id)}
                 />
               )}
             </div>
@@ -307,6 +377,14 @@ export function App() {
         </section>
       </main>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
   );
 }
 
