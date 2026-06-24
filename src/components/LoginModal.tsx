@@ -27,10 +27,10 @@ export function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border border-slate-100">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border border-sf-cream-dark">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Lock className="w-5 h-5 text-sky-600" /> Admin Authentication
+          <h3 className="text-lg font-bold text-sf-brown flex items-center gap-2">
+            <Lock className="w-5 h-5 text-sf-gold" /> Admin Authentication
           </h3>
           <button
             onClick={onClose}
@@ -48,7 +48,7 @@ export function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+              className="w-full px-3 py-2 border border-sf-cream-dark rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold"
             />
           </div>
           <div>
@@ -60,7 +60,7 @@ export function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+              className="w-full px-3 py-2 border border-sf-cream-dark rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold"
               placeholder="••••"
             />
           </div>
@@ -71,7 +71,7 @@ export function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
           )}
           <button
             onClick={handleSubmit}
-            className="w-full bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 rounded-lg transition-colors shadow-xs"
+            className="w-full bg-sf-brown hover:bg-sf-brown-dark text-white font-medium py-2 rounded-lg transition-colors shadow-xs"
           >
             Verify & Login
           </button>

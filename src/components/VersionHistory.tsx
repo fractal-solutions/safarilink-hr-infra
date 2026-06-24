@@ -28,10 +28,10 @@ export function VersionHistory({ sectionId, onClose }: VersionHistoryProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700">
-        <div className="flex justify-between items-center p-5 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <History className="w-5 h-5 text-sky-600" /> Version History
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-sf-cream-dark dark:border-slate-700">
+        <div className="flex justify-between items-center p-5 border-b border-sf-cream-dark dark:border-slate-700">
+          <h3 className="text-lg font-bold text-sf-brown dark:text-slate-100 flex items-center gap-2">
+            <History className="w-5 h-5 text-sf-gold" /> Version History
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-5 h-5" />
@@ -50,11 +50,11 @@ export function VersionHistory({ sectionId, onClose }: VersionHistoryProps) {
               {versions.map((v) => (
                 <div
                   key={v.id}
-                  className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                  className="border border-sf-cream-dark dark:border-slate-700 rounded-lg overflow-hidden"
                 >
                   <button
                     onClick={() => setExpandedId(expandedId === v.id ? null : v.id)}
-                    className="w-full flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
+                    className="w-full flex items-center justify-between p-3 hover:bg-sf-cream dark:hover:bg-slate-800 transition-colors text-left"
                   >
                     <div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{v.title}</p>
@@ -65,8 +65,8 @@ export function VersionHistory({ sectionId, onClose }: VersionHistoryProps) {
                     <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", expandedId === v.id && "rotate-180")} />
                   </button>
                   {expandedId === v.id && (
-                    <div className="px-3 pb-3 border-t border-slate-100 dark:border-slate-700 pt-2">
-                      <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-sm text-slate-600 dark:text-slate-300 max-h-40 overflow-y-auto">
+                    <div className="px-3 pb-3 border-t border-sf-cream-dark dark:border-slate-700 pt-2">
+                      <div className="bg-sf-cream dark:bg-slate-800 rounded-lg p-3 text-sm text-slate-600 dark:text-slate-300 max-h-40 overflow-y-auto">
                         <div dangerouslySetInnerHTML={{ __html: v.content }} />
                       </div>
                     </div>

@@ -67,6 +67,13 @@ export async function changePassword(userId: string, password: string): Promise<
   })) ?? { ok: false, error: "Request failed" };
 }
 
+export async function updateEmail(userId: string, email: string): Promise<{ ok: boolean; error?: string }> {
+  return (await request(`/users/${userId}/email`, {
+    method: "PUT",
+    body: JSON.stringify({ email }),
+  })) ?? { ok: false, error: "Request failed" };
+}
+
 export async function elevateUser(userId: string): Promise<boolean> {
   const res = await request(`/users/${userId}/elevate`, { method: "POST" });
   return res !== null;
@@ -151,6 +158,11 @@ export async function reorderSections(order: { id: string; sort_order: number }[
 // Tracking
 export async function getTracking(): Promise<Record<string, boolean>> {
   const data = await request<Record<string, boolean>>("/tracking");
+  return data ?? {};
+}
+
+export async function getAllTracking(): Promise<Record<string, string>> {
+  const data = await request<Record<string, string>>("/tracking/all");
   return data ?? {};
 }
 

@@ -37,12 +37,12 @@ export function SearchResults({ query, onClose, onSelectDoc }: SearchResultsProp
   };
 
   return (
-    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-[70vh] overflow-y-auto">
-      <div className="sticky top-0 bg-white dark:bg-slate-800 p-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-sf-cream-dark dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-[70vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white dark:bg-slate-800 p-3 border-b border-sf-cream-dark dark:border-slate-700 flex items-center justify-between">
         <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
           {loading ? "Searching..." : `${documents.length + sections.length} result${documents.length + sections.length !== 1 ? "s" : ""}`}
         </span>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
+        <button onClick={onClose} className="p-1 hover:bg-sf-cream dark:hover:bg-slate-700 rounded">
           <X className="w-4 h-4 text-slate-400" />
         </button>
       </div>
@@ -61,9 +61,9 @@ export function SearchResults({ query, onClose, onSelectDoc }: SearchResultsProp
             <button
               key={doc.id}
               onClick={() => { onSelectDoc(doc.id); onClose(); }}
-              className="w-full text-left p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3"
+              className="w-full text-left p-3 rounded-lg hover:bg-sf-cream dark:hover:bg-slate-700 transition-colors flex items-center gap-3"
             >
-              <FileText className="w-4 h-4 text-sky-500 shrink-0" />
+              <FileText className="w-4 h-4 text-sf-gold shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{doc.title}</p>
                 <p className="text-xs text-slate-400">{doc.sections.length} sections</p>
@@ -80,11 +80,11 @@ export function SearchResults({ query, onClose, onSelectDoc }: SearchResultsProp
             <button
               key={`${item.document_id}-${item.section.id}-${i}`}
               onClick={() => { onSelectDoc(item.document_id); onClose(); }}
-              className="w-full text-left p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="w-full text-left p-3 rounded-lg hover:bg-sf-cream dark:hover:bg-slate-700 transition-colors"
             >
               <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.section.title}</p>
               <p className="text-xs text-slate-400 truncate">{stripHtml(item.section.content).slice(0, 100)}</p>
-              <p className="text-[10px] text-sky-500 mt-1">in {item.document_title}</p>
+              <p className="text-[10px] text-sf-gold mt-1">in {item.document_title}</p>
             </button>
           ))}
         </div>

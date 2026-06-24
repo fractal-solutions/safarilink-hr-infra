@@ -52,7 +52,7 @@ const server = serve({
         if (!user) return json({ error: "Invalid username or password" }, 401);
 
         const token = createSession(user.id);
-        const res = json({ user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role } });
+        const res = json({ user: { id: user.id, username: user.username, displayName: user.display_name, email: user.email, role: user.role } });
         return cookieSet(res, token);
       },
     },
@@ -72,7 +72,7 @@ const server = serve({
         ).run(id, username, password, displayName, "user", now);
 
         const token = createSession(id);
-        const res = json({ user: { id, username, displayName, role: "user" } });
+        const res = json({ user: { id, username, displayName, email: null, role: "user" } });
         return cookieSet(res, token);
       },
     },
@@ -96,7 +96,7 @@ const server = serve({
       async GET(req) {
         const user = getSessionUser(req);
         if (!user) return unauthorized();
-        return json({ user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role } });
+        return json({ user: { id: user.id, username: user.username, displayName: user.display_name, email: user.email, role: user.role } });
       },
     },
 
@@ -106,8 +106,8 @@ const server = serve({
       async GET(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
-        const users = db.query("SELECT id, username, display_name, role, created_at FROM users").all();
-        return json({ users: users.map((u: any) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, createdAt: u.created_at })) });
+        const users = db.query("SELECT id, username, display_name, email, role, created_at FROM users").all();
+        return json({ users: users.map((u: any) => ({ id: u.id, username: u.username, displayName: u.display_name, email: u.email, role: u.role, createdAt: u.created_at })) });
       },
     },
 
@@ -123,6 +123,19 @@ const server = serve({
         if (!target) return notFound();
         db.query("UPDATE users SET password = ? WHERE id = ?").run(password, id);
         addAuditLog(null, user.id, "password_change", `Changed password for user ${id}`);
+        return json({ ok: true });
+      },
+    },
+
+    "/api/users/:id/email": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        if (user.id !== id) return forbidden();
+        const { email } = await readBody(req);
+        if (!email || !email.includes("@")) return json({ error: "Valid email required" }, 400);
+        db.query("UPDATE users SET email = ? WHERE id = ?").run(email, id);
         return json({ ok: true });
       },
     },
@@ -370,6 +383,21 @@ const server = serve({
       },
     },
 
+    "/api/tracking/all": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const rows = db.query(
+          "SELECT t.user_id, t.section_id, t.read_at FROM tracking t JOIN users u ON t.user_id = u.id WHERE u.role != 'admin'"
+        ).all();
+        const tracking: Record<string, string> = {};
+        for (const row of rows) {
+          tracking[`${(row as any).user_id}_${(row as any).section_id}`] = (row as any).read_at;
+        }
+        return json(tracking);
+      },
+    },
+
     "/api/tracking/:sectionId": {
       async PUT(req) {
         const user = getSessionUser(req);
@@ -447,14 +475,16 @@ const server = serve({
         const user = getSessionUser(req);
         if (!user) return unauthorized();
         const totalDocs = (db.query("SELECT COUNT(*) as c FROM documents WHERE archived = 0").get() as any).c;
-        const totalUsers = (db.query("SELECT COUNT(*) as c FROM users").get() as any).c;
+        const totalUsers = (db.query("SELECT COUNT(*) as c FROM users WHERE role != 'admin'").get() as any).c;
         const totalSections = (db.query("SELECT COUNT(*) as c FROM sections").get() as any).c;
-        const readSections = user.role === "admin"
-          ? totalSections
-          : (db.query("SELECT COUNT(*) as c FROM tracking WHERE user_id = ?").get(user.id) as any).c;
-        const overallCompletion = totalSections > 0 ? Math.round((readSections / totalSections) * 100) : 0;
+        const staffReadSections = (db.query(
+          "SELECT COUNT(DISTINCT t.section_id) as c FROM tracking t JOIN users u ON t.user_id = u.id WHERE u.role != 'admin'"
+        ).get() as any).c;
+        const overallCompletion = totalSections > 0 && totalUsers > 0
+          ? Math.round((staffReadSections / (totalSections * totalUsers)) * 100)
+          : 0;
         const archivedDocs = (db.query("SELECT COUNT(*) as c FROM documents WHERE archived = 1").get() as any).c;
-        return json({ totalDocs, totalUsers, totalSections, readSections, overallCompletion, archivedDocs });
+        return json({ totalDocs, totalUsers, totalSections, overallCompletion, archivedDocs });
       },
     },
 

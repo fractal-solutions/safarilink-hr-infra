@@ -27,9 +27,9 @@ export function PdfExport({ document: doc }: PdfExportProps) {
         <style>
           @page { margin: 20mm; }
           body { font-family: system-ui, -apple-system, sans-serif; color: #1e293b; line-height: 1.6; }
-          h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; border-bottom: 2px solid #0ea5e9; padding-bottom: 0.5rem; }
-          h2 { font-size: 1.25rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; color: #0369a1; }
-          .section { page-break-inside: avoid; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }
+          h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; border-bottom: 2px solid #5C3A1E; padding-bottom: 0.5rem; color: #5C3A1E; }
+          h2 { font-size: 1.25rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; color: #C8A951; }
+          .section { page-break-inside: avoid; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #F5EDE0; }
           .section:last-child { border-bottom: none; }
           .content { font-size: 0.9rem; }
           .content p { margin: 0.5em 0; }
@@ -59,7 +59,7 @@ export function PdfExport({ document: doc }: PdfExportProps) {
   return (
     <button
       onClick={handlePrint}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-sf-cream dark:bg-slate-700 hover:bg-sf-cream-dark dark:hover:bg-slate-600 rounded-lg transition-colors"
       title="Export as PDF"
     >
       <Printer className="w-4 h-4" />

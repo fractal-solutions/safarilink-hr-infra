@@ -34,15 +34,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const icons = {
-    success: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
+    success: <CheckCircle2 className="w-4 h-4 text-sf-gold" />,
     error: <AlertTriangle className="w-4 h-4 text-red-500" />,
-    info: <Info className="w-4 h-4 text-sky-500" />,
+    info: <Info className="w-4 h-4 text-sf-gold" />,
   };
 
   const bgColors = {
-    success: "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800",
+    success: "bg-sf-cream dark:bg-sf-brown/30 border-sf-cream-dark dark:border-sf-brown-light",
     error: "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800",
-    info: "bg-sky-50 dark:bg-sky-900/30 border-sky-200 dark:border-sky-800",
+    info: "bg-sf-cream dark:bg-sf-brown/30 border-sf-cream-dark dark:border-sf-brown-light",
   };
 
   return (

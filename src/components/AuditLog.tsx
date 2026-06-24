@@ -29,10 +29,10 @@ export function AuditLog({ documentId }: AuditLogProps) {
   };
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden mt-6">
+    <div className="border border-sf-cream-dark dark:border-slate-700 rounded-xl overflow-hidden mt-6">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-sf-cream dark:hover:bg-slate-800 transition-colors"
       >
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-slate-400" />
@@ -44,16 +44,16 @@ export function AuditLog({ documentId }: AuditLogProps) {
       </button>
 
       {expanded && (
-        <div className="border-t border-slate-200 dark:border-slate-700">
+        <div className="border-t border-sf-cream-dark dark:border-slate-700">
           {loading ? (
             <div className="p-4 text-center text-slate-400 text-sm">Loading audit trail...</div>
           ) : entries.length === 0 ? (
             <div className="p-4 text-center text-slate-400 text-sm">No audit entries yet.</div>
           ) : (
-            <div className="divide-y divide-slate-100 dark:divide-slate-700 max-h-64 overflow-y-auto">
+            <div className="divide-y divide-sf-cream-dark dark:divide-slate-700 max-h-64 overflow-y-auto">
               {entries.map((entry) => (
-                <div key={entry.id} className="p-3 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <div className="p-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg shrink-0 mt-0.5">
+                <div key={entry.id} className="p-3 flex items-start gap-3 hover:bg-sf-cream dark:hover:bg-slate-800/50">
+                  <div className="p-1.5 bg-sf-cream dark:bg-slate-700 rounded-lg shrink-0 mt-0.5">
                     <FileText className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                   </div>
                   <div className="min-w-0 flex-1">

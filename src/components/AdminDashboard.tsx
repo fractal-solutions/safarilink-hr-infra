@@ -17,8 +17,8 @@ export function AdminDashboard({ documents }: AdminDashboardProps) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center space-x-4">
-        <div className="p-3 bg-sky-50 dark:bg-sky-900/30 rounded-lg text-sky-600">
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-sf-cream-dark dark:border-slate-700 shadow-xs flex items-center space-x-4">
+        <div className="p-3 bg-sf-cream dark:bg-sf-brown/30 rounded-lg text-sf-brown">
           <Files className="w-6 h-6" />
         </div>
         <div>
@@ -26,8 +26,8 @@ export function AdminDashboard({ documents }: AdminDashboardProps) {
           <h4 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{stats?.totalPolicies ?? documents.length}</h4>
         </div>
       </div>
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center space-x-4">
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg text-emerald-600">
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-sf-cream-dark dark:border-slate-700 shadow-xs flex items-center space-x-4">
+        <div className="p-3 bg-sf-cream dark:bg-sf-brown/30 rounded-lg text-sf-brown">
           <Users className="w-6 h-6" />
         </div>
         <div>
@@ -35,8 +35,8 @@ export function AdminDashboard({ documents }: AdminDashboardProps) {
           <h4 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{stats?.totalUsers ?? 0}</h4>
         </div>
       </div>
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center space-x-4">
-        <div className="p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg text-amber-600">
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-sf-cream-dark dark:border-slate-700 shadow-xs flex items-center space-x-4">
+        <div className="p-3 bg-sf-gold/20 dark:bg-sf-gold/10 rounded-lg text-sf-gold-dark">
           <Activity className="w-6 h-6" />
         </div>
         <div>

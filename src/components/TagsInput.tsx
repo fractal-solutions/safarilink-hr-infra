@@ -24,7 +24,7 @@ export function TagsInput({ tags, onChange, disabled }: TagsInputProps) {
   };
 
   const tagColors = [
-    "bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-700",
+    "bg-sf-cream text-sf-brown border-sf-cream-dark dark:bg-sf-brown/30 dark:text-sf-gold dark:border-sf-brown-light",
     "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700",
     "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700",
     "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700",
@@ -59,10 +59,10 @@ export function TagsInput({ tags, onChange, disabled }: TagsInputProps) {
               if (e.key === "Enter") { e.preventDefault(); addTag(); }
             }}
             placeholder="Add tag..."
-            className="w-20 px-2 py-0.5 text-xs border border-slate-200 dark:border-slate-600 bg-transparent rounded focus:outline-none focus:ring-1 focus:ring-sky-500"
+            className="w-20 px-2 py-0.5 text-xs border border-sf-cream-dark dark:border-slate-600 bg-transparent rounded focus:outline-none focus:ring-1 focus:ring-sf-gold"
           />
           {input.trim() && (
-            <button onClick={addTag} className="text-sky-600 hover:text-sky-700">
+            <button onClick={addTag} className="text-sf-gold hover:text-sf-gold-dark">
               <Plus className="w-3.5 h-3.5" />
             </button>
           )}

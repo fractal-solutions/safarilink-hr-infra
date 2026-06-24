@@ -46,18 +46,18 @@ export function DueDateDashboard() {
           {items.map((entry) => (
             <div
               key={entry.id}
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 flex items-center justify-between"
+              className="bg-white dark:bg-slate-800 border border-sf-cream-dark dark:border-slate-700 rounded-lg p-4 flex items-center justify-between"
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{entry.title}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {entry.readSections}/{entry.totalSections} sections read ({entry.completionPct}%)
                 </p>
-                <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
+                <div className="w-full bg-sf-cream-dark dark:bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
                   <div
                     className={cn(
                       "h-1.5 rounded-full transition-all",
-                      entry.completionPct === 100 ? "bg-emerald-500" : entry.completionPct > 50 ? "bg-sky-500" : "bg-amber-500"
+                      entry.completionPct === 100 ? "bg-sf-gold" : entry.completionPct > 50 ? "bg-sf-brown-light" : "bg-amber-500"
                     )}
                     style={{ width: `${entry.completionPct}%` }}
                   />
@@ -86,7 +86,7 @@ export function DueDateDashboard() {
     <div>
       {renderGroup("Overdue", overdue, "text-red-600 dark:text-red-400", <AlertTriangle className="w-4 h-4 text-red-500" />)}
       {renderGroup("Due Soon (7 days)", upcoming, "text-amber-600 dark:text-amber-400", <Clock className="w-4 h-4 text-amber-500" />)}
-      {renderGroup("On Track", onTrack, "text-emerald-600 dark:text-emerald-400", <CheckCircle2 className="w-4 h-4 text-emerald-500" />)}
+      {renderGroup("On Track", onTrack, "text-sf-gold-dark", <CheckCircle2 className="w-4 h-4 text-sf-gold" />)}
     </div>
   );
 }

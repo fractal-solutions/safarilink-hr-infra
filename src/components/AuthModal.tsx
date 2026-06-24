@@ -65,13 +65,13 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-slate-100 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-sf-cream-dark dark:border-slate-700">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h3 className="text-lg font-bold text-sf-brown dark:text-slate-100 flex items-center gap-2">
             {mode === "login" ? (
-              <><Lock className="w-5 h-5 text-sky-600" /> Sign In</>
+              <><Lock className="w-5 h-5 text-sf-gold" /> Sign In</>
             ) : (
-              <><UserPlus className="w-5 h-5 text-sky-600" /> Create Account</>
+              <><UserPlus className="w-5 h-5 text-sf-gold" /> Create Account</>
             )}
           </h3>
         </div>
@@ -85,7 +85,7 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
                 placeholder="e.g., Joseph Kiprop"
               />
             </div>
@@ -98,7 +98,7 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm"
+              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
               placeholder="e.g., jkiprop"
             />
           </div>
@@ -110,7 +110,7 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm"
+              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
               placeholder={mode === "login" ? "••••" : "At least 4 characters"}
             />
           </div>
@@ -119,16 +119,16 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
 
           <button
             onClick={handleSubmit}
-            className="w-full bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 rounded-lg transition-colors shadow-xs"
+            className="w-full bg-sf-brown hover:bg-sf-brown-dark text-white font-medium py-2 rounded-lg transition-colors shadow-xs"
           >
             {mode === "login" ? "Sign In" : "Create Account"}
           </button>
 
           <p className="text-center text-xs text-slate-500 dark:text-slate-400">
             {mode === "login" ? (
-              <>Don&apos;t have an account? <button onClick={() => { setMode("signup"); setError(""); }} className="text-sky-600 hover:text-sky-700 font-semibold">Create one</button></>
+              <>Don&apos;t have an account? <button onClick={() => { setMode("signup"); setError(""); }} className="text-sf-gold hover:text-sf-gold-dark font-semibold">Create one</button></>
             ) : (
-              <>Already have an account? <button onClick={() => { setMode("login"); setError(""); }} className="text-sky-600 hover:text-sky-700 font-semibold">Sign in</button></>
+              <>Already have an account? <button onClick={() => { setMode("login"); setError(""); }} className="text-sf-gold hover:text-sf-gold-dark font-semibold">Sign in</button></>
             )}
           </p>
 

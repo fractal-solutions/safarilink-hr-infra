@@ -2,6 +2,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@theme {
+  --color-sf-brown: #5C3A1E;
+  --color-sf-brown-dark: #4A2E17;
+  --color-sf-brown-light: #7A5230;
+  --color-sf-gold: #C8A951;
+  --color-sf-gold-light: #D4BA6A;
+  --color-sf-gold-dark: #B89A3E;
+  --color-sf-cream: #FDF8F0;
+  --color-sf-cream-dark: #F5EDE0;
+}
+
 ::placeholder {
   color: #94a3b8;
   opacity: 1;

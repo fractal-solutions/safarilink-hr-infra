@@ -45,7 +45,7 @@ export function DocumentReader({
 
   if (document.sections.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+      <div className="text-center py-12 text-slate-400 dark:text-slate-500 border-2 border-dashed border-sf-cream-dark dark:border-slate-700 rounded-xl">
         <FolderOpen className="w-12 h-12 mx-auto mb-2 opacity-40" />
         <p className="text-sm">
           This compliance framework contains no section records yet.
@@ -78,8 +78,8 @@ export function DocumentReader({
             className={cn(
               "rounded-xl border transition-all duration-200 overflow-hidden",
               isRead
-                ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/10 dark:bg-emerald-900/10"
-                : "border-slate-200 dark:border-slate-700 shadow-xs",
+                ? "border-sf-gold/30 bg-sf-gold/5 dark:bg-sf-gold/5"
+                : "border-sf-cream-dark dark:border-slate-700 shadow-xs",
               "bg-white dark:bg-slate-800"
             )}
           >
@@ -88,15 +88,15 @@ export function DocumentReader({
               className={cn(
                 "w-full flex items-center justify-between p-4 text-left transition-colors",
                 isOpen
-                  ? "bg-slate-50 dark:bg-slate-750"
-                  : "hover:bg-slate-50 dark:hover:bg-slate-750"
+                  ? "bg-sf-cream dark:bg-slate-800"
+                  : "hover:bg-sf-cream-dark dark:hover:bg-slate-800"
               )}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div
                   className={cn(
                     "w-2 h-2 rounded-full shrink-0",
-                    isRead ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+                    isRead ? "bg-sf-gold" : "bg-slate-300 dark:bg-slate-600"
                   )}
                 />
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
@@ -110,7 +110,7 @@ export function DocumentReader({
                       e.stopPropagation();
                       onViewVersions(sec.id);
                     }}
-                    className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors"
+                    className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-sf-brown dark:hover:text-sf-gold hover:bg-sf-cream dark:hover:bg-sf-brown/20 transition-colors"
                     title="Version History"
                   >
                     <History className="w-3.5 h-3.5" />
@@ -122,13 +122,16 @@ export function DocumentReader({
                       e.stopPropagation();
                       onEditSection(sec.id);
                     }}
-                    className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors"
+                    className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-sf-brown dark:hover:text-sf-gold hover:bg-sf-cream dark:hover:bg-sf-brown/20 transition-colors"
                     title="Edit Section"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </span>
                 )}
-                <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 tabular-nums">
+                <span className={cn(
+                  "text-[11px] font-medium tabular-nums",
+                  isRead ? "text-sf-gold-dark" : "text-slate-400 dark:text-slate-500"
+                )}>
                   {isRead ? "Done" : "Open"}
                 </span>
                 <ChevronDown
@@ -141,20 +144,20 @@ export function DocumentReader({
             </button>
 
             {isOpen && (
-              <div className="border-t border-slate-100 dark:border-slate-700">
+              <div className="border-t border-sf-cream-dark dark:border-slate-700">
                 <div className="p-5 prose prose-slate dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-300 leading-relaxed space-y-2">
                   <div dangerouslySetInnerHTML={{ __html: sec.content }} />
                 </div>
 
-                <div className="px-5 pb-4 pt-1 border-t border-slate-100 dark:border-slate-700">
+                <div className="px-5 pb-4 pt-1 border-t border-sf-cream-dark dark:border-slate-700">
                   {currentRole !== "admin" ? (
                     <button
                       onClick={() => onToggleRead(sec.id)}
                       className={cn(
                         "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all",
                         isRead
-                          ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-200 dark:hover:bg-emerald-800/40"
-                          : "bg-sky-600 hover:bg-sky-700 text-white border border-sky-600"
+                          ? "bg-sf-gold/15 dark:bg-sf-gold/10 text-sf-brown-dark dark:text-sf-gold border border-sf-gold/30 dark:border-sf-gold/20 hover:bg-sf-gold/25 dark:hover:bg-sf-gold/15"
+                          : "bg-sf-brown hover:bg-sf-brown-dark text-white border border-sf-brown"
                       )}
                     >
                       {isRead ? (
@@ -167,7 +170,7 @@ export function DocumentReader({
                         : "I have read this section"}
                     </button>
                   ) : (
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600">
+                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-sf-cream dark:bg-slate-700 text-sf-brown-light dark:text-slate-400 border border-sf-cream-dark dark:border-slate-600">
                       Admin Read-Only
                     </span>
                   )}

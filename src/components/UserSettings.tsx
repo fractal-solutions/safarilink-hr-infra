@@ -77,10 +77,10 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 border border-slate-100 max-h-[85vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 border border-sf-cream-dark max-h-[85vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Users className="w-5 h-5 text-sky-600" /> User Management
+          <h3 className="text-lg font-bold text-sf-brown flex items-center gap-2">
+            <Users className="w-5 h-5 text-sf-gold" /> User Management
           </h3>
           <button
             onClick={onClose}
@@ -90,16 +90,16 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
+        <div className="flex-1 overflow-y-auto divide-y divide-sf-cream-dark border border-sf-cream-dark rounded-lg">
           {users.map((u) => (
-            <div key={u.id} className="p-3 hover:bg-slate-50 transition-colors">
+            <div key={u.id} className="p-3 hover:bg-sf-cream transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
                       u.role === "admin"
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-slate-100 text-slate-600"
+                        ? "bg-sf-gold/20 text-sf-brown-dark"
+                        : "bg-sf-cream text-slate-600"
                     }`}
                   >
                     {u.displayName.charAt(0).toUpperCase()}
@@ -110,13 +110,13 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
                         {u.displayName}
                       </span>
                       {u.id === "usr-admin" && (
-                        <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <Crown className="w-3.5 h-3.5 text-sf-gold shrink-0" />
                       )}
                     </div>
                     <span className="text-[11px] text-slate-400">
                       @{u.username}
                       {u.role === "admin" && (
-                        <span className="ml-1.5 text-amber-600 font-medium">
+                        <span className="ml-1.5 text-sf-gold-dark font-medium">
                           Admin
                         </span>
                       )}
@@ -155,7 +155,7 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
                               setNewPassword("");
                               setPasswordError("");
                             }}
-                            className="p-1.5 rounded-md text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+                            className="p-1.5 rounded-md text-slate-400 hover:text-sf-brown hover:bg-sf-cream transition-colors"
                             title="Change Password"
                           >
                             <KeyRound className="w-4 h-4" />
@@ -163,7 +163,7 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
                           {u.role === "user" ? (
                             <button
                               onClick={() => handleElevate(u.id)}
-                              className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-sf-gold-dark hover:bg-sf-gold/10 transition-colors"
                               title="Elevate to Admin"
                             >
                               <Shield className="w-4 h-4" />
@@ -192,7 +192,7 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
               </div>
 
               {editingPassword === u.id && (
-                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+                <div className="mt-3 pt-3 border-t border-sf-cream-dark flex items-center gap-2">
                   <input
                     type="password"
                     value={newPassword}
@@ -204,12 +204,12 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
                       e.key === "Enter" && handlePasswordChange(u.id)
                     }
                     placeholder="New password"
-                    className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm"
+                    className="flex-1 px-3 py-1.5 border border-sf-cream-dark rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
                     autoFocus
                   />
                   <button
                     onClick={() => handlePasswordChange(u.id)}
-                    className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium rounded-lg transition-colors shrink-0"
+                    className="px-3 py-1.5 bg-sf-brown hover:bg-sf-brown-dark text-white text-xs font-medium rounded-lg transition-colors shrink-0"
                   >
                     Save
                   </button>
@@ -219,7 +219,7 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
                       setNewPassword("");
                       setPasswordError("");
                     }}
-                    className="px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded-lg transition-colors shrink-0"
+                    className="px-2 py-1.5 text-xs text-slate-500 hover:bg-sf-cream rounded-lg transition-colors shrink-0"
                   >
                     Cancel
                   </button>

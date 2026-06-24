@@ -4,7 +4,9 @@ node_modules
 # output
 out
 dist
+source
 *.tgz
+
 
 # code coverage
 coverage

@@ -16,7 +16,7 @@ import { ToastProvider, useToast } from "@/components/Toast";
 import { DueDateDashboard } from "@/components/DueDateDashboard";
 import { VersionHistory } from "@/components/VersionHistory";
 import { ImportExport } from "@/components/ImportExport";
-import { ListPlus, BarChart3, BookOpen, Calendar } from "lucide-react";
+import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X } from "lucide-react";
 
 function AppInner() {
   const { toast } = useToast();
@@ -41,6 +41,8 @@ function AppInner() {
     return false;
   });
   const [versionSectionId, setVersionSectionId] = useState<string | null>(null);
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
 
   const loadDocs = useCallback(async () => {
     const docs = await api.getDocuments();
@@ -82,8 +84,23 @@ function AppInner() {
       await loadTracking();
       setShowAuth(false);
       toast("Welcome back!", "success");
+      if (session.role !== "admin" && !session.email) {
+        setTimeout(() => setShowEmailPrompt(true), 1500);
+      }
     }
   }, [loadDocs, loadTracking, toast]);
+
+  const handleSaveEmail = useCallback(async () => {
+    if (!user || !emailInput.includes("@")) return;
+    const result = await api.updateEmail(user.id, emailInput);
+    if (result.ok) {
+      setUser({ ...user, email: emailInput });
+      setShowEmailPrompt(false);
+      toast("Email saved successfully", "success");
+    } else {
+      toast(result.error || "Failed to save email", "error");
+    }
+  }, [user, emailInput, toast]);
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -183,9 +200,9 @@ function AppInner() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="h-screen flex items-center justify-center bg-sf-cream dark:bg-slate-950">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-4 border-sf-brown border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
         </div>
       </div>
@@ -216,7 +233,7 @@ function AppInner() {
   const showAnalytics = viewingReports || viewingOverallAnalytics;
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans h-screen flex flex-col overflow-hidden">
+      <div className="bg-sf-cream dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans h-screen flex flex-col overflow-hidden">
       <Header
         user={user}
         onLogout={handleLogout}
@@ -252,6 +269,47 @@ function AppInner() {
         />
       )}
 
+      {showEmailPrompt && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-sf-cream-dark dark:border-slate-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-sf-brown dark:text-slate-100 flex items-center gap-2">
+                <Mail className="w-5 h-5 text-sf-gold" /> Add Your Email
+              </h3>
+              <button onClick={() => setShowEmailPrompt(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Please provide your email address for reporting and communication purposes.
+            </p>
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSaveEmail()}
+              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm mb-4"
+              placeholder="you@safarilink.co.ke"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowEmailPrompt(false)}
+                className="px-4 py-2 text-sm text-slate-500 font-medium hover:bg-sf-cream dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Skip for now
+              </button>
+              <button
+                onClick={handleSaveEmail}
+                className="px-4 py-2 text-sm bg-sf-brown hover:bg-sf-brown-dark text-white font-medium rounded-lg transition-colors shadow-xs"
+              >
+                Save Email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="flex-1 flex max-w-[1600px] w-full mx-auto p-6 gap-6 overflow-hidden min-h-0">
         <Sidebar
           documents={documents}
@@ -281,8 +339,8 @@ function AppInner() {
                   }}
                   className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors flex items-center gap-2 ${
                     viewingDueDates
-                      ? "bg-amber-600 text-white border-amber-600"
-                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                      ? "bg-sf-gold text-sf-brown border-sf-gold"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sf-cream dark:hover:bg-slate-700"
                   }`}
                 >
                   <Calendar className="w-4 h-4" /> Due Dates
@@ -295,8 +353,8 @@ function AppInner() {
                   }}
                   className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors flex items-center gap-2 ${
                     viewingOverallAnalytics
-                      ? "bg-sky-600 text-white border-sky-600"
-                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                      ? "bg-sf-brown text-white border-sf-brown"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sf-cream dark:hover:bg-slate-700"
                   }`}
                 >
                   <BarChart3 className="w-4 h-4" />
@@ -306,8 +364,8 @@ function AppInner() {
             </div>
           )}
 
-          <div className="bg-white dark:bg-slate-900 flex-1 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 flex flex-col min-h-0 overflow-hidden">
-            <div className="border-b border-slate-200 dark:border-slate-700 p-5 flex justify-between items-center bg-slate-50 dark:bg-slate-800 rounded-t-xl">
+          <div className="bg-white dark:bg-slate-900 flex-1 rounded-xl shadow-xs border border-sf-cream-dark dark:border-slate-700 flex flex-col min-h-0 overflow-hidden">
+            <div className="border-b border-sf-cream-dark dark:border-slate-700 p-5 flex justify-between items-center bg-sf-cream dark:bg-slate-800 rounded-t-xl">
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
                   {viewingDueDates
@@ -325,17 +383,21 @@ function AppInner() {
                 </p>
               </div>
               <div className="flex items-center space-x-2">
-                {isAdmin && !viewingOverallAnalytics && !viewingDueDates && (
+                {isAdmin && !viewingOverallAnalytics && !viewingDueDates && activeDoc && (
                   <>
                     <button
                       onClick={() => setShowNewSection(true)}
-                      className="bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 text-sm rounded-lg font-medium transition-colors flex items-center gap-1.5 shadow-xs"
+                      className="bg-sf-brown hover:bg-sf-brown-dark text-white px-3 py-1.5 text-sm rounded-lg font-medium transition-colors flex items-center gap-1.5 shadow-xs"
                     >
                       <ListPlus className="w-4 h-4" /> Add Section
                     </button>
                     <button
                       onClick={() => setViewingReports((v) => !v)}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 text-sm rounded-lg font-medium border border-slate-200 transition-colors flex items-center gap-1.5"
+                      className={`px-3 py-1.5 text-sm rounded-lg font-medium border transition-colors flex items-center gap-1.5 ${
+                        viewingReports
+                          ? "bg-sf-gold text-sf-brown border-sf-gold"
+                          : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sf-cream dark:hover:bg-slate-700"
+                      }`}
                     >
                       {viewingReports ? (
                         <>
@@ -343,7 +405,7 @@ function AppInner() {
                         </>
                       ) : (
                         <>
-                          <BarChart3 className="w-4 h-4" /> This Manual
+                          <BarChart3 className="w-4 h-4" /> Manual Report
                         </>
                       )}
                     </button>

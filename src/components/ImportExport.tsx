@@ -59,14 +59,14 @@ export function ImportExport({ onImportComplete }: ImportExportProps) {
     <div className="flex items-center gap-2">
       <button
         onClick={handleExport}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-600 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-sf-cream dark:bg-slate-700 hover:bg-sf-cream-dark dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg border border-sf-cream-dark dark:border-slate-600 transition-colors"
       >
         <Download className="w-3.5 h-3.5" /> Export
       </button>
       <button
         onClick={handleImport}
         disabled={importing}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-600 transition-colors disabled:opacity-50"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-sf-cream dark:bg-slate-700 hover:bg-sf-cream-dark dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg border border-sf-cream-dark dark:border-slate-600 transition-colors disabled:opacity-50"
       >
         <Upload className="w-3.5 h-3.5" /> {importing ? "Importing..." : "Import"}
       </button>

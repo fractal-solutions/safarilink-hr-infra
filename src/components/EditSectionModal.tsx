@@ -36,9 +36,9 @@ export function EditSectionModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 border border-slate-100 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 border border-sf-cream-dark max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900">
+          <h3 className="text-lg font-bold text-sf-brown">
             Edit Section Block
           </h3>
           <button
@@ -57,7 +57,7 @@ export function EditSectionModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 text-sm"
+              className="w-full px-3 py-2 border border-sf-cream-dark rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
             />
           </div>
           <div>
@@ -74,13 +74,13 @@ export function EditSectionModal({
           <div className="flex justify-end space-x-2 pt-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm text-slate-500 font-medium hover:bg-slate-50 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm text-slate-500 font-medium hover:bg-sf-cream rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-700 text-white font-medium rounded-lg transition-colors shadow-xs"
+              className="px-4 py-2 text-sm bg-sf-brown hover:bg-sf-brown-dark text-white font-medium rounded-lg transition-colors shadow-xs"
             >
               Save Changes
             </button>

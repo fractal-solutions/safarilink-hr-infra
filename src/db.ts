@@ -18,6 +18,7 @@ db.exec(`
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     display_name TEXT NOT NULL,
+    email TEXT,
     role TEXT NOT NULL DEFAULT 'user',
     created_at TEXT NOT NULL
   );
@@ -79,6 +80,11 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `);
+
+// Migration: add email column if missing
+try {
+  db.query("ALTER TABLE users ADD COLUMN email TEXT");
+} catch {}
 
 const userCount = db.query("SELECT COUNT(*) as cnt FROM users").get() as any;
 if (userCount.cnt === 0) {
