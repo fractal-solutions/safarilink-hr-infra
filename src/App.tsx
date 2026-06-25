@@ -16,7 +16,7 @@ import { ToastProvider, useToast } from "@/components/Toast";
 import { DueDateDashboard } from "@/components/DueDateDashboard";
 import { VersionHistory } from "@/components/VersionHistory";
 import { ImportExport } from "@/components/ImportExport";
-import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X, Trash2, RotateCcw } from "lucide-react";
+import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X, Trash2, RotateCcw, Menu, ChevronDown } from "lucide-react";
 
 function AppInner() {
   const { toast } = useToast();
@@ -45,6 +45,7 @@ function AppInner() {
   const [emailInput, setEmailInput] = useState("");
   const [viewingTrash, setViewingTrash] = useState(false);
   const [trashDocs, setTrashDocs] = useState<{ id: string; title: string; deletedAt: string }[]>([]);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   const loadDocs = useCallback(async () => {
     const docs = await api.getDocuments();

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { BookOpen, ChevronRight, Plus, GripVertical, Calendar, Archive, X, Tag } from "lucide-react";
+import { BookOpen, ChevronRight, Plus, GripVertical, Calendar, Archive, X, Tag, Trash2, Pencil } from "lucide-react";
 import type { PolicyDocument, UserRole } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,8 @@ interface SidebarProps {
   onSelectDoc: (docId: string) => void;
   onCreateDoc: () => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  onTrash?: (docId: string) => void;
+  onEditDueDate?: (docId: string, dueDate: string | null) => void;
   searchQuery?: string;
   isOpen?: boolean;
   onClose?: () => void;
@@ -26,12 +28,16 @@ export function Sidebar({
   onSelectDoc,
   onCreateDoc,
   onReorder,
+  onTrash,
+  onEditDueDate,
   searchQuery = "",
   isOpen = false,
   onClose,
 }: SidebarProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [editingDueDate, setEditingDueDate] = useState<string | null>(null);
+  const [dueDateValue, setDueDateValue] = useState("");
   const dragCounter = useRef<number[]>([]);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -89,6 +95,16 @@ export function Sidebar({
         );
       })
     : documents;
+
+  const startEditDueDate = (docId: string, currentDate: string | null) => {
+    setEditingDueDate(docId);
+    setDueDateValue(currentDate ? currentDate.slice(0, 10) : "");
+  };
+
+  const saveDueDate = (docId: string) => {
+    onEditDueDate?.(docId, dueDateValue || null);
+    setEditingDueDate(null);
+  };
 
   const sidebarContent = (
     <aside className={cn(
@@ -151,8 +167,7 @@ export function Sidebar({
                 !isDragging && !isDropTarget && "border-transparent"
               )}
             >
-              <button
-                onClick={() => { onSelectDoc(doc.id); onClose?.(); }}
+              <div
                 className={cn(
                   "w-full text-left p-3 rounded-lg border transition-all flex flex-col gap-1.5",
                   isActive
@@ -160,7 +175,10 @@ export function Sidebar({
                     : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-sf-cream dark:hover:bg-slate-750"
                 )}
               >
-                <div className="flex justify-between items-start w-full">
+                <div
+                  className="flex justify-between items-start w-full cursor-pointer"
+                  onClick={() => { onSelectDoc(doc.id); onClose?.(); }}
+                >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     {canDrag && (
                       <GripVertical className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0 cursor-grab active:cursor-grabbing" />
@@ -177,12 +195,48 @@ export function Sidebar({
                   </div>
                 </div>
 
-                {doc.due_date && (
-                  <div className="flex items-center gap-1 text-[10px] text-sf-brown dark:text-sf-gold-light">
+                {editingDueDate === doc.id ? (
+                  <div className="flex items-center gap-1 mt-1">
+                    <input
+                      type="date"
+                      value={dueDateValue}
+                      onChange={(e) => setDueDateValue(e.target.value)}
+                      className="flex-1 px-2 py-1 text-[11px] border border-sf-cream-dark dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-1 focus:ring-sf-gold"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => saveDueDate(doc.id)}
+                      className="text-[10px] font-bold text-sf-brown bg-sf-cream dark:bg-slate-700 px-1.5 py-0.5 rounded hover:bg-sf-cream-dark"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingDueDate(null)}
+                      className="text-[10px] text-slate-400 hover:text-slate-600 px-1"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : doc.due_date ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); startEditDueDate(doc.id, doc.due_date); }}
+                    className="flex items-center gap-1 text-[10px] text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 group/due"
+                  >
                     <Calendar className="w-3 h-3" />
                     <span>Due {new Date(doc.due_date).toLocaleDateString()}</span>
-                  </div>
-                )}
+                    {currentRole === "admin" && (
+                      <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/due:opacity-100 transition-opacity" />
+                    )}
+                  </button>
+                ) : currentRole === "admin" ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); startEditDueDate(doc.id, null); }}
+                    className="flex items-center gap-1 text-[10px] text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400"
+                  >
+                    <Calendar className="w-3 h-3" />
+                    <span>Set due date</span>
+                  </button>
+                ) : null}
 
                 {doc.tags && doc.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -206,9 +260,20 @@ export function Sidebar({
                 </div>
                 <div className="flex justify-between items-center text-[11px] text-slate-400 w-full font-normal">
                   <span>{totalSec} section{totalSec !== 1 ? "s" : ""}</span>
-                  <span className="font-medium text-sf-brown-light dark:text-slate-400">{pct}% Read</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sf-brown-light dark:text-slate-400">{pct}% Read</span>
+                    {canDrag && onTrash && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (confirm(`Move "${doc.title}" to trash?`)) onTrash(doc.id); }}
+                        className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 transition-colors"
+                        title="Move to trash"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </button>
+              </div>
             </div>
           );
         })}
