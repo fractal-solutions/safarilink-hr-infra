@@ -83,8 +83,30 @@ db.exec(`
 
 // Migration: add email column if missing
 try {
-  db.query("ALTER TABLE users ADD COLUMN email TEXT");
-} catch {}
+  db.exec("ALTER TABLE users ADD COLUMN email TEXT");
+  console.log("Migration: added email column to users");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration email:", e.message);
+}
+
+// Migration: add deleted_at column for soft delete
+try {
+  db.exec("ALTER TABLE documents ADD COLUMN deleted_at TEXT");
+  console.log("Migration: added deleted_at column to documents");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration deleted_at:", e.message);
+}
+
+// Tracking history table for trend data
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tracking_history (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    section_id TEXT NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )
+`);
 
 const userCount = db.query("SELECT COUNT(*) as cnt FROM users").get() as any;
 if (userCount.cnt === 0) {

@@ -10,9 +10,17 @@ import {
   Download,
   FileDown,
   Filter,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Circle,
+  CheckCircle,
+  BarChart3,
+  Activity,
 } from "lucide-react";
 import type { PolicyDocument, User } from "@/types";
 import * as api from "@/api";
+import type { TrendPoint } from "@/api";
 import { cn } from "@/lib/utils";
 
 interface ReportsViewProps {
@@ -45,11 +53,25 @@ export function ReportsView({
   const [allTracking, setAllTracking] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [threshold, setThreshold] = useState(50);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserStat | null>(null);
+  const [userAudit, setUserAudit] = useState<any[]>([]);
+  const [auditTab, setAuditTab] = useState<"sections" | "audit">("sections");
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [showTrend, setShowTrend] = useState(false);
 
   useEffect(() => {
     import("@/auth").then(({ getAllUsers }) => getAllUsers().then(setAllUsers));
     api.getAllTracking().then(setAllTracking);
+    api.getTrend().then((data) => setTrend(data.trend));
   }, []);
+
+  useEffect(() => {
+    if (selectedUser) {
+      api.getUserAudit(selectedUser.id).then(setUserAudit);
+      setAuditTab("sections");
+    }
+  }, [selectedUser]);
 
   const docs = filterDocument
     ? documents.filter((d) => d.id === filterDocument.id)
@@ -100,8 +122,8 @@ export function ReportsView({
   const notStarted = userStats.filter((u) => u.overallPct === 0).length;
   const inProgressCount = userStats.length - fullyCompliant - notStarted;
 
-  const overallRate = totalSections > 0 && staffUsers.length > 0
-    ? Math.round(userStats.reduce((sum, u) => sum + u.overallPct, 0) / staffUsers.length)
+  const overallRate = userStats.length > 0
+    ? Math.round(userStats.reduce((sum, u) => sum + u.overallPct, 0) / userStats.length)
     : 0;
 
   const title = filterDocument
@@ -119,6 +141,19 @@ export function ReportsView({
     { key: "compliant", label: "Compliant", count: fullyCompliant },
     { key: "below-threshold", label: `Below ${threshold}%`, count: userStats.filter((u) => u.overallPct < threshold).length },
   ];
+
+  const getBarColor = (pct: number) => {
+    if (pct === 100) return "bg-sf-gold";
+    if (pct > 50) return "bg-sf-brown-light";
+    if (pct > 0) return "bg-amber-500";
+    return "bg-slate-300";
+  };
+
+  const getStatusBadge = (pct: number) => {
+    if (pct === 100) return { text: "Compliant", className: "bg-sf-gold/15 text-sf-brown-dark" };
+    if (pct > 0) return { text: "In Progress", className: "bg-amber-100 text-amber-700" };
+    return { text: "Not Started", className: "bg-slate-100 text-slate-500" };
+  };
 
   const exportCSV = () => {
     const headers = ["Name", "Username", "Email", ...docs.map((d) => d.title), "Overall %", "Status"];
@@ -155,26 +190,39 @@ export function ReportsView({
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!doc) { document.body.removeChild(iframe); return; }
 
-    const manualHeaders = docs.map((d) => `<th style="padding:8px;border-bottom:2px solid #F5EDE0;text-align:center;font-size:0.65rem;max-width:100px;word-break:break-word">${d.title.length > 20 ? d.title.slice(0, 18) + "..." : d.title}</th>`).join("");
-
-    const userRows = filteredUsers.map((u) => {
-      const statusColor = u.overallPct === 100 ? "#5C3A1E" : u.overallPct > 0 ? "#C8A951" : "#999";
-      const statusText = u.overallPct === 100 ? "Compliant" : u.overallPct === 0 ? "Not Started" : "In Progress";
-      const manualCells = u.docStats.map((ds) => {
-        const color = ds.pct === 100 ? "#5C3A1E" : ds.pct > 0 ? "#C8A951" : "#ccc";
-        return `<td style="padding:6px 8px;border-bottom:1px solid #F5EDE0;text-align:center;font-size:0.75rem"><span style="color:${color};font-weight:600">${ds.pct}%</span><br/><span style="font-size:0.65rem;color:#999">${ds.read}/${ds.total}</span></td>`;
-      }).join("");
-      return `<tr>
-        <td style="padding:8px;border-bottom:1px solid #F5EDE0;font-weight:600;font-size:0.8rem">${u.displayName}</td>
-        <td style="padding:8px;border-bottom:1px solid #F5EDE0;color:#666;font-size:0.75rem">@${u.username}</td>
-        <td style="padding:8px;border-bottom:1px solid #F5EDE0;color:#666;font-size:0.75rem">${u.email || "—"}</td>
-        ${manualCells}
-        <td style="padding:8px;border-bottom:1px solid #F5EDE0;text-align:center;font-weight:700;font-size:0.8rem;color:${statusColor}">${u.overallPct}%</td>
-        <td style="padding:8px;border-bottom:1px solid #F5EDE0;text-align:center;font-size:0.7rem"><span style="padding:2px 8px;border-radius:4px;background:${u.overallPct === 100 ? "#FDF8F0" : u.overallPct > 0 ? "#FFF8E1" : "#F5F5F5"};color:${statusColor};font-weight:600">${statusText}</span></td>
-      </tr>`;
-    }).join("");
-
     const filterLabel = activeTab === "all" ? "All Staff" : activeTab === "compliant" ? "Compliant Staff" : activeTab === "non-compliant" ? "Non-Compliant Staff" : activeTab === "in-progress" ? "In Progress Staff" : `Staff Below ${threshold}%`;
+
+    const userCards = filteredUsers.map((u) => {
+      const status = getStatusBadge(u.overallPct);
+      const manualBars = u.docStats.map((ds) => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">
+          <div style="min-width:200px;max-width:280px;font-size:0.75rem;color:#555" title="${ds.docTitle}">${ds.docTitle}</div>
+          <div style="flex:1;height:8px;background:#F5EDE0;border-radius:4px;overflow:hidden">
+            <div style="width:${ds.pct}%;height:100%;background:${ds.pct === 100 ? '#C8A951' : ds.pct > 50 ? '#7A5230' : ds.pct > 0 ? '#D4A017' : '#ddd'};border-radius:4px"></div>
+          </div>
+          <div style="min-width:45px;text-align:right;font-size:0.75rem;font-weight:600;color:#5C3A1E">${ds.pct}%</div>
+          <div style="min-width:45px;text-align:right;font-size:0.7rem;color:#999">${ds.read}/${ds.total}</div>
+        </div>
+      `).join("");
+
+      return `
+        <div style="border:1px solid #F5EDE0;border-radius:8px;padding:14px;margin-bottom:12px;page-break-inside:avoid">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div>
+              <div style="font-weight:700;font-size:0.9rem;color:#5C3A1E">${u.displayName}</div>
+              <div style="font-size:0.7rem;color:#888">@${u.username}${u.email ? ` · ${u.email}` : ""}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:1.3rem;font-weight:700;color:${u.overallPct === 100 ? '#5C3A1E' : u.overallPct > 0 ? '#C8A951' : '#999'}">${u.overallPct}%</div>
+              <div style="font-size:0.65rem;padding:2px 8px;border-radius:4px;background:${u.overallPct === 100 ? '#FDF8F0' : u.overallPct > 0 ? '#FFF8E1' : '#F5F5F5'};color:${u.overallPct === 100 ? '#5C3A1E' : u.overallPct > 0 ? '#B8860B' : '#999'};font-weight:600">${status.text}</div>
+            </div>
+          </div>
+          <div style="border-top:1px solid #F5EDE0;padding-top:8px">
+            ${manualBars}
+          </div>
+        </div>
+      `;
+    }).join("");
 
     doc.open();
     doc.write(`
@@ -183,19 +231,17 @@ export function ReportsView({
       <head>
         <title>${title} — ${filterLabel}</title>
         <style>
-          @page { margin: 15mm; landscape; }
-          body { font-family: system-ui, -apple-system, sans-serif; color: #1e293b; line-height: 1.4; margin: 0; padding: 16px; font-size: 0.8rem; }
-          h1 { font-size: 1.3rem; font-weight: 700; color: #5C3A1E; margin: 0 0 2px 0; }
-          .subtitle { font-size: 0.8rem; color: #666; margin: 0 0 16px 0; }
-          .filter-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; background: #FDF8F0; border: 1px solid #F5EDE0; color: #5C3A1E; font-weight: 600; font-size: 0.75rem; margin-bottom: 16px; }
+          @page { margin: 18mm; }
+          body { font-family: system-ui, -apple-system, sans-serif; color: #1e293b; line-height: 1.4; margin: 0; padding: 20px; }
+          h1 { font-size: 1.4rem; font-weight: 700; color: #5C3A1E; margin: 0 0 2px 0; }
+          .subtitle { font-size: 0.8rem; color: #666; margin: 0 0 12px 0; }
+          .filter-badge { display: inline-block; padding: 4px 12px; border-radius: 6px; background: #FDF8F0; border: 1px solid #F5EDE0; color: #5C3A1E; font-weight: 600; font-size: 0.8rem; margin-bottom: 16px; }
           .stats { display: flex; gap: 12px; margin-bottom: 20px; }
-          .stat-box { flex: 1; padding: 12px; background: #FDF8F0; border: 1px solid #F5EDE0; border-radius: 8px; }
+          .stat-box { flex: 1; padding: 14px; background: #FDF8F0; border: 1px solid #F5EDE0; border-radius: 8px; }
           .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; font-weight: 600; }
           .stat-value { font-size: 1.5rem; font-weight: 700; color: #5C3A1E; }
-          table { width: 100%; border-collapse: collapse; }
-          th { background: #FDF8F0; color: #5C3A1E; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px; text-align: left; border-bottom: 2px solid #F5EDE0; }
+          .section-title { font-size: 1rem; font-weight: 700; color: #5C3A1E; margin: 20px 0 12px 0; padding-bottom: 4px; border-bottom: 2px solid #C8A951; }
           .footer { margin-top: 24px; font-size: 0.7rem; color: #999; border-top: 1px solid #F5EDE0; padding-top: 8px; }
-          .section-title { font-size: 0.9rem; font-weight: 700; color: #5C3A1E; margin: 20px 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid #C8A951; }
         </style>
       </head>
       <body>
@@ -208,20 +254,8 @@ export function ReportsView({
           <div class="stat-box"><div class="stat-label">In Progress</div><div class="stat-value">${inProgressCount}</div></div>
           <div class="stat-box"><div class="stat-label">Not Started</div><div class="stat-value">${notStarted}</div></div>
         </div>
-        <div class="section-title">Staff Compliance Details (${filterLabel})</div>
-        <table>
-          <thead>
-            <tr>
-              <th style="min-width:100px">Name</th>
-              <th>Username</th>
-              <th>Email</th>
-              ${manualHeaders}
-              <th style="text-align:center">Overall</th>
-              <th style="text-align:center">Status</th>
-            </tr>
-          </thead>
-          <tbody>${userRows}</tbody>
-        </table>
+        <div class="section-title">Staff Compliance Details — ${filterLabel}</div>
+        ${userCards}
         <p class="footer">Generated on ${new Date().toLocaleDateString()} | Safarilink HR Compliance Portal — ${filterLabel}</p>
       </body>
       </html>
@@ -298,6 +332,52 @@ export function ReportsView({
         </div>
       </div>
 
+      {!filterDocument && trend.length > 0 && (
+        <div className="bg-white rounded-xl border border-sf-cream-dark shadow-xs overflow-hidden">
+          <button
+            onClick={() => setShowTrend(!showTrend)}
+            className="w-full p-4 flex items-center justify-between text-left hover:bg-sf-cream/50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-sf-gold" />
+              <h4 className="font-bold text-sf-brown text-sm">Completion Over Time</h4>
+              <span className="text-[11px] text-slate-400">({trend.length} data points)</span>
+            </div>
+            {showTrend ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+          </button>
+          {showTrend && (
+            <div className="px-4 pb-4">
+              <div className="flex items-end gap-1 h-32">
+                {trend.map((tp, i) => {
+                  const maxPct = Math.max(...trend.map((t) => t.completionPct), 1);
+                  const height = (tp.completionPct / maxPct) * 100;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                      <div className="absolute bottom-full mb-2 hidden group-hover:block z-10">
+                        <div className="bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap shadow-lg">
+                          {tp.date}: {tp.completionPct}% (+{tp.readCount} read, -{tp.unreadCount} unread)
+                        </div>
+                      </div>
+                      <div
+                        className={cn(
+                          "w-full rounded-t transition-all min-h-[2px]",
+                          tp.completionPct >= 80 ? "bg-sf-gold" : tp.completionPct >= 40 ? "bg-sf-brown-light" : "bg-amber-400"
+                        )}
+                        style={{ height: `${Math.max(height, 2)}%` }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-between mt-2 text-[10px] text-slate-400">
+                <span>{trend[0]?.date}</span>
+                <span>{trend[trend.length - 1]?.date}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-sf-cream-dark shadow-xs overflow-hidden">
         <div className="p-4 border-b border-sf-cream-dark">
           <div className="flex items-center gap-2 mb-3">
@@ -342,79 +422,208 @@ export function ReportsView({
           )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-sf-cream text-sf-brown-light font-semibold text-xs tracking-wider border-b border-sf-cream-dark uppercase">
-                <th className="p-4 sticky left-0 bg-sf-cream z-10">Staff Member</th>
-                {!filterDocument && docs.map((doc) => (
-                  <th key={doc.id} className="p-4 text-center min-w-[120px]">
-                    <div className="truncate max-w-[120px]" title={doc.title}>{doc.title}</div>
-                  </th>
-                ))}
-                <th className="p-4 text-center">Overall</th>
-                <th className="p-4 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm text-slate-700 divide-y divide-sf-cream-dark">
-              {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={docs.length + 3} className="p-8 text-center text-slate-400 text-sm">
-                    No staff match this filter.
-                  </td>
-                </tr>
-              )}
-              {filteredUsers.map((u) => {
-                const statusText = u.overallPct === 100 ? "Compliant" : u.overallPct === 0 ? "Not Started" : "In Progress";
-                return (
-                  <tr key={u.id} className="hover:bg-sf-cream/80 transition-colors">
-                    <td className="p-4 sticky left-0 bg-white z-10">
-                      <div className="font-semibold text-slate-900">{u.displayName}</div>
-                      <div className="text-xs text-slate-400">
-                        @{u.username}
-                        {u.email && <span className="ml-1.5 text-sf-gold-dark">{u.email}</span>}
-                      </div>
-                    </td>
-                    {!filterDocument && u.docStats.map((ds) => (
-                      <td key={ds.docId} className="p-4 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-16 bg-sf-cream-dark rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className={cn("h-1.5 rounded-full transition-all", ds.pct === 100 ? "bg-sf-gold" : ds.pct > 0 ? "bg-sf-brown-light" : "bg-red-300")}
-                              style={{ width: `${ds.pct}%` }}
-                            />
-                          </div>
-                          <span className="text-[11px] text-slate-500 tabular-nums">{ds.read}/{ds.total}</span>
-                        </div>
-                      </td>
-                    ))}
-                    <td className="p-4 text-center">
-                      <span className={cn(
-                        "px-2.5 py-1 text-xs font-bold rounded-lg border inline-block",
-                        u.overallPct === 100 ? "bg-sf-gold/10 text-sf-brown-dark border-sf-gold/30" :
-                        u.overallPct > 0 ? "bg-amber-50 text-amber-700 border-amber-200" :
-                        "bg-red-50 text-red-700 border-red-200"
-                      )}>
-                        {u.overallPct}%
+        <div className="p-4 space-y-3">
+          {filteredUsers.length === 0 && (
+            <div className="p-8 text-center text-slate-400 text-sm">
+              No staff match this filter.
+            </div>
+          )}
+          {filteredUsers.map((u) => {
+            const status = getStatusBadge(u.overallPct);
+            return (
+              <div
+                key={u.id}
+                onClick={() => setSelectedUser(u)}
+                className="border border-sf-cream-dark rounded-xl overflow-hidden bg-white hover:border-sf-gold/30 hover:shadow-md transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-4 p-4">
+                  <div className="w-10 h-10 rounded-full bg-sf-cream flex items-center justify-center font-bold text-sm text-sf-brown shrink-0">
+                    {u.displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900 truncate">{u.displayName}</span>
+                      <span className={cn("px-2 py-0.5 text-[10px] font-semibold rounded-md", status.className)}>
+                        {status.text}
                       </span>
-                    </td>
-                    <td className="p-4 text-center">
-                      <span className={cn(
-                        "px-2 py-0.5 text-[11px] font-semibold rounded-md inline-block",
-                        u.overallPct === 100 ? "bg-sf-gold/15 text-sf-brown-dark" :
-                        u.overallPct > 0 ? "bg-amber-100 text-amber-700" :
-                        "bg-slate-100 text-slate-500"
-                      )}>
-                        {statusText}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      @{u.username}{u.email && <span className="ml-1.5 text-sf-gold-dark">{u.email}</span>}
+                    </div>
+                    <div className="w-full bg-sf-cream-dark rounded-full h-1.5 mt-2 overflow-hidden">
+                      <div
+                        className={cn("h-1.5 rounded-full transition-all", getBarColor(u.overallPct))}
+                        style={{ width: `${u.overallPct}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className={cn(
+                      "text-xl font-bold tabular-nums",
+                      u.overallPct === 100 ? "text-sf-brown-dark" : u.overallPct > 0 ? "text-sf-gold-dark" : "text-slate-400"
+                    )}>
+                      {u.overallPct}%
+                    </div>
+                    <div className="text-[10px] text-slate-400">overall</div>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {selectedUser && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border border-sf-cream-dark dark:border-slate-700">
+            <div className="flex items-center gap-4 p-5 border-b border-sf-cream-dark dark:border-slate-700">
+              <div className="w-12 h-12 rounded-full bg-sf-cream dark:bg-slate-700 flex items-center justify-center font-bold text-lg text-sf-brown shrink-0">
+                {selectedUser.displayName.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold text-sf-brown dark:text-slate-100">{selectedUser.displayName}</h3>
+                <p className="text-xs text-slate-400">
+                  @{selectedUser.username}{selectedUser.email && <span className="ml-1.5 text-sf-gold-dark">{selectedUser.email}</span>}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <div className={cn(
+                  "text-2xl font-bold tabular-nums",
+                  selectedUser.overallPct === 100 ? "text-sf-brown-dark" : selectedUser.overallPct > 0 ? "text-sf-gold-dark" : "text-slate-400"
+                )}>
+                  {selectedUser.overallPct}%
+                </div>
+                <div className={cn(
+                  "text-xs font-semibold px-2 py-0.5 rounded-md inline-block",
+                  getStatusBadge(selectedUser.overallPct).className
+                )}>
+                  {getStatusBadge(selectedUser.overallPct).text}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUser(null)}
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-sf-cream dark:hover:bg-slate-700 transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <div className="flex border-b border-sf-cream-dark dark:border-slate-700 px-5 pt-3 gap-1">
+                <button
+                  onClick={() => setAuditTab("sections")}
+                  className={cn(
+                    "px-3 py-2 text-xs font-medium rounded-t-lg transition-colors",
+                    auditTab === "sections"
+                      ? "bg-sf-cream dark:bg-slate-800 text-sf-brown dark:text-slate-100 border border-sf-cream-dark dark:border-slate-700 border-b-transparent -mb-px"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  )}
+                >
+                  Section Progress
+                </button>
+                <button
+                  onClick={() => setAuditTab("audit")}
+                  className={cn(
+                    "px-3 py-2 text-xs font-medium rounded-t-lg transition-colors",
+                    auditTab === "audit"
+                      ? "bg-sf-cream dark:bg-slate-800 text-sf-brown dark:text-slate-100 border border-sf-cream-dark dark:border-slate-700 border-b-transparent -mb-px"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  )}
+                >
+                  Activity Log ({userAudit.length})
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+              {auditTab === "sections" ? (
+              <>
+              {selectedUser.docStats.map((ds) => {
+                const sections = docs.find((d) => d.id === ds.docId)?.sections || [];
+                return (
+                  <div key={ds.docId} className="border border-sf-cream-dark dark:border-slate-700 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between p-4 bg-sf-cream dark:bg-slate-800">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-bold text-sf-brown dark:text-slate-100 truncate">{ds.docTitle}</h4>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{ds.read} of {ds.total} sections read</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="w-24 bg-sf-cream-dark dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={cn("h-2 rounded-full transition-all", getBarColor(ds.pct))}
+                            style={{ width: `${ds.pct}%` }}
+                          />
+                        </div>
+                        <span className={cn(
+                          "text-sm font-bold tabular-nums w-10 text-right",
+                          ds.pct === 100 ? "text-sf-brown-dark" : ds.pct > 0 ? "text-sf-gold-dark" : "text-slate-400"
+                        )}>
+                          {ds.pct}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-sf-cream-dark dark:divide-slate-700">
+                      {sections.map((sec) => {
+                        const isRead = !!allTracking[`${selectedUser.id}_${sec.id}`];
+                        return (
+                          <div key={sec.id} className="flex items-center gap-3 px-4 py-2.5">
+                            <div className="shrink-0">
+                              {isRead ? (
+                                <CheckCircle className="w-4 h-4 text-sf-gold" />
+                              ) : (
+                                <Circle className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+                              )}
+                            </div>
+                            <span className={cn(
+                              "text-xs flex-1 min-w-0 truncate",
+                              isRead ? "text-slate-700 dark:text-slate-300 font-medium" : "text-slate-400 dark:text-slate-500"
+                            )}>
+                              {sec.title}
+                            </span>
+                            <span className={cn(
+                              "text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0",
+                              isRead ? "bg-sf-gold/15 text-sf-brown-dark" : "bg-slate-100 dark:bg-slate-700 text-slate-400"
+                            )}>
+                              {isRead ? "Read" : "Unread"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                       {sections.length === 0 && (
+                        <div className="px-4 py-3 text-xs text-slate-400 text-center">No sections in this manual</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              </>
+              ) : (
+              <div className="space-y-2">
+                {userAudit.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-8">No activity recorded yet.</p>
+                ) : (
+                  userAudit.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-3 p-3 bg-sf-cream/50 dark:bg-slate-800/50 rounded-lg border border-sf-cream-dark dark:border-slate-700">
+                      <div className="w-2 h-2 rounded-full bg-sf-gold mt-2 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{entry.action.replace(/_/g, " ")}</span>
+                          {entry.details && (
+                            <span className="text-[11px] text-slate-400 truncate">— {entry.details}</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{new Date(entry.createdAt).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

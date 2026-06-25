@@ -16,7 +16,7 @@ import { ToastProvider, useToast } from "@/components/Toast";
 import { DueDateDashboard } from "@/components/DueDateDashboard";
 import { VersionHistory } from "@/components/VersionHistory";
 import { ImportExport } from "@/components/ImportExport";
-import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X } from "lucide-react";
+import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X, Trash2, RotateCcw } from "lucide-react";
 
 function AppInner() {
   const { toast } = useToast();
@@ -43,6 +43,8 @@ function AppInner() {
   const [versionSectionId, setVersionSectionId] = useState<string | null>(null);
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
   const [emailInput, setEmailInput] = useState("");
+  const [viewingTrash, setViewingTrash] = useState(false);
+  const [trashDocs, setTrashDocs] = useState<{ id: string; title: string; deletedAt: string }[]>([]);
 
   const loadDocs = useCallback(async () => {
     const docs = await api.getDocuments();
@@ -53,6 +55,18 @@ function AppInner() {
     const t = await api.getTracking();
     setTracking(t);
   }, []);
+
+  const loadTrash = useCallback(async () => {
+    const trash = await api.getTrash();
+    setTrashDocs(trash);
+  }, []);
+
+  const handleRestore = useCallback(async (docId: string) => {
+    await api.restoreDocument(docId);
+    await loadTrash();
+    await loadDocs();
+    toast("Document restored", "success");
+  }, [loadTrash, loadDocs, toast]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -244,7 +258,7 @@ function AppInner() {
       />
 
       <AuthModal isOpen={false} onAuth={handleAuth} />
-      <UserSettings isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      <UserSettings isOpen={showSettings} onClose={() => setShowSettings(false)} currentUser={user} />
       <NewDocModal
         isOpen={showNewDoc}
         onClose={() => setShowNewDoc(false)}
@@ -336,6 +350,7 @@ function AppInner() {
                     setViewingDueDates((v) => !v);
                     setViewingOverallAnalytics(false);
                     setViewingReports(false);
+                    setViewingTrash(false);
                   }}
                   className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors flex items-center gap-2 ${
                     viewingDueDates
@@ -350,6 +365,7 @@ function AppInner() {
                     setViewingOverallAnalytics((v) => !v);
                     setViewingReports(false);
                     setViewingDueDates(false);
+                    setViewingTrash(false);
                   }}
                   className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors flex items-center gap-2 ${
                     viewingOverallAnalytics
@@ -359,6 +375,23 @@ function AppInner() {
                 >
                   <BarChart3 className="w-4 h-4" />
                   {viewingOverallAnalytics ? "Exit Overview" : "Full Analytics"}
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingTrash((v) => !v);
+                    setViewingOverallAnalytics(false);
+                    setViewingReports(false);
+                    setViewingDueDates(false);
+                    if (!viewingTrash) loadTrash();
+                  }}
+                  className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors flex items-center gap-2 ${
+                    viewingTrash
+                      ? "bg-red-600 text-white border-red-600"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-sf-cream dark:hover:bg-slate-700"
+                  }`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {viewingTrash ? "Close Trash" : "Trash"}
                 </button>
               </div>
             </div>
@@ -415,7 +448,33 @@ function AppInner() {
             </div>
 
             <div className="flex-1 p-6 overflow-y-auto">
-              {viewingDueDates ? (
+              {viewingTrash ? (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-sf-brown flex items-center gap-2">
+                    <Trash2 className="w-5 h-5 text-red-500" /> Trashed Documents
+                  </h3>
+                  {trashDocs.length === 0 ? (
+                    <p className="text-sm text-slate-400 py-8 text-center">Trash is empty.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {trashDocs.map((td) => (
+                        <div key={td.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-sf-cream-dark dark:border-slate-700 rounded-xl">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{td.title}</p>
+                            <p className="text-[11px] text-slate-400">Deleted {new Date(td.deletedAt).toLocaleDateString()}</p>
+                          </div>
+                          <button
+                            onClick={() => handleRestore(td.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-sf-cream hover:bg-sf-cream-dark text-sf-brown rounded-lg border border-sf-cream-dark transition-colors"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" /> Restore
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : viewingDueDates ? (
                 <DueDateDashboard />
               ) : showAnalytics && isAdmin ? (
                 <ReportsView

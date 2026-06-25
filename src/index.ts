@@ -2,6 +2,26 @@ import { serve } from "bun";
 import index from "./index.html";
 import db, { getSessionUser, createSession, setSessionCookie, clearSessionCookie, addAuditLog } from "./db";
 
+// Rate limiter
+const rateLimits = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(key: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = rateLimits.get(key);
+  if (!entry || now > entry.resetAt) {
+    rateLimits.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxRequests) return false;
+  entry.count++;
+  return true;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimits) {
+    if (now > entry.resetAt) rateLimits.delete(key);
+  }
+}, 60_000);
+
 function json(data: any, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -45,6 +65,10 @@ const server = serve({
 
     "/api/auth/login": {
       async POST(req) {
+        const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+        if (!checkRateLimit(`login:${ip}`, 10, 60_000)) {
+          return json({ error: "Too many login attempts. Try again in a minute." }, 429);
+        }
         const { username, password } = await readBody(req);
         if (!username || !password) return json({ error: "Username and password required" }, 400);
 
@@ -59,6 +83,10 @@ const server = serve({
 
     "/api/auth/register": {
       async POST(req) {
+        const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+        if (!checkRateLimit(`register:${ip}`, 5, 60_000)) {
+          return json({ error: "Too many registration attempts. Try again in a minute." }, 429);
+        }
         const { username, password, displayName } = await readBody(req);
         if (!username || !password || !displayName) return json({ error: "All fields required" }, 400);
 
@@ -162,7 +190,6 @@ const server = serve({
         if (!user || user.role !== "admin") return forbidden();
         const { id } = req.params;
         if (user.id === id) return json({ error: "Cannot delete yourself" }, 400);
-        if (id === "usr-admin") return json({ error: "Cannot delete default admin" }, 400);
         const target = db.query("SELECT id FROM users WHERE id = ?").get(id);
         if (!target) return notFound();
         db.query("DELETE FROM users WHERE id = ?").run(id);
@@ -179,7 +206,7 @@ const server = serve({
         if (!user) return unauthorized();
         const url = new URL(req.url);
         const archived = url.searchParams.get("archived") === "true" ? 1 : 0;
-        const docs = db.query("SELECT * FROM documents WHERE archived = ? ORDER BY sort_order").all(archived);
+        const docs = db.query("SELECT * FROM documents WHERE archived = ? AND deleted_at IS NULL ORDER BY sort_order").all(archived);
         const result = docs.map((doc: any) => {
           const sections = db.query("SELECT * FROM sections WHERE document_id = ? ORDER BY sort_order").all(doc.id);
           const tags = db.query("SELECT tag FROM document_tags WHERE document_id = ?").all(doc.id).map((t: any) => t.tag);
@@ -221,45 +248,25 @@ const server = serve({
       },
     },
 
-    "/api/documents/reorder": {
-      async PUT(req) {
+    "/api/documents/:id/restore": {
+      async POST(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
-        const { order } = await readBody(req);
-        if (!Array.isArray(order)) return json({ error: "order array required" }, 400);
-        for (const item of order) {
-          db.query("UPDATE documents SET sort_order = ? WHERE id = ?").run(item.sort_order, item.id);
-        }
+        const { id } = req.params;
+        const doc = db.query("SELECT * FROM documents WHERE id = ? AND deleted_at IS NOT NULL").get(id) as any;
+        if (!doc) return notFound();
+        db.query("UPDATE documents SET deleted_at = NULL WHERE id = ?").run(id);
+        addAuditLog(id, user.id, "document_restore", `Restored "${doc.title}" from trash`);
         return json({ ok: true });
       },
     },
 
-    "/api/documents/:id": {
-      async PUT(req) {
+    "/api/documents/trash": {
+      async GET(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
-        const { id } = req.params;
-        const doc = db.query("SELECT * FROM documents WHERE id = ?").get(id) as any;
-        if (!doc) return notFound();
-        const body = await readBody(req);
-        const title = body.title ?? doc.title;
-        const archived = body.archived !== undefined ? (body.archived ? 1 : 0) : doc.archived;
-        const dueDate = body.dueDate !== undefined ? body.dueDate : doc.due_date;
-        const now = new Date().toISOString();
-        db.query("UPDATE documents SET title = ?, archived = ?, due_date = ?, updated_at = ? WHERE id = ?").run(title, archived, dueDate, now, id);
-        addAuditLog(id, user.id, "document_update", `Updated document "${title}"`);
-        return json({ ok: true });
-      },
-
-      async DELETE(req) {
-        const user = getSessionUser(req);
-        if (!user || user.role !== "admin") return forbidden();
-        const { id } = req.params;
-        const doc = db.query("SELECT * FROM documents WHERE id = ?").get(id) as any;
-        if (!doc) return notFound();
-        db.query("DELETE FROM documents WHERE id = ?").run(id);
-        addAuditLog(id, user.id, "document_delete", `Deleted document "${doc.title}"`);
-        return json({ ok: true });
+        const docs = db.query("SELECT * FROM documents WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC").all() as any[];
+        return json(docs.map((d: any) => ({ id: d.id, title: d.title, deletedAt: d.deleted_at })));
       },
     },
 
@@ -404,15 +411,23 @@ const server = serve({
         if (!user) return unauthorized();
         const { sectionId } = req.params;
         const { read } = await readBody(req);
-        const sec = db.query("SELECT id FROM sections WHERE id = ?").get(sectionId);
+        const sec = db.query("SELECT id, document_id, title FROM sections WHERE id = ?").get(sectionId) as any;
         if (!sec) return notFound();
         if (read) {
           const existing = db.query("SELECT user_id FROM tracking WHERE user_id = ? AND section_id = ?").get(user.id, sectionId);
           if (!existing) {
             db.query("INSERT INTO tracking (user_id, section_id, read_at) VALUES (?, ?, ?)").run(user.id, sectionId, new Date().toISOString());
+            db.query("INSERT INTO tracking_history (id, user_id, section_id, action, created_at) VALUES (?, ?, ?, ?, ?)").run(
+              crypto.randomUUID(), user.id, sectionId, "read", new Date().toISOString()
+            );
+            addAuditLog(sec.document_id, user.id, "section_read", `Marked "${sec.title}" as read`);
           }
         } else {
           db.query("DELETE FROM tracking WHERE user_id = ? AND section_id = ?").run(user.id, sectionId);
+          db.query("INSERT INTO tracking_history (id, user_id, section_id, action, created_at) VALUES (?, ?, ?, ?, ?)").run(
+            crypto.randomUUID(), user.id, sectionId, "unread", new Date().toISOString()
+          );
+          addAuditLog(sec.document_id, user.id, "section_unread", `Unmarked "${sec.title}"`);
         }
         return json({ ok: true });
       },
@@ -468,6 +483,26 @@ const server = serve({
       },
     },
 
+    "/api/users/:id/audit": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const entries = db.query(
+          "SELECT a.*, u.username FROM audit_log a LEFT JOIN users u ON a.user_id = u.id WHERE a.user_id = ? ORDER BY a.created_at DESC LIMIT 100"
+        ).all(id);
+        return json(entries.map((e: any) => ({
+          id: e.id,
+          documentId: e.document_id,
+          userId: e.user_id,
+          username: e.username,
+          action: e.action,
+          details: e.details,
+          createdAt: e.created_at,
+        })));
+      },
+    },
+
     // ─── Stats ───────────────────────────────────────────────
 
     "/api/stats": {
@@ -485,6 +520,37 @@ const server = serve({
           : 0;
         const archivedDocs = (db.query("SELECT COUNT(*) as c FROM documents WHERE archived = 1").get() as any).c;
         return json({ totalDocs, totalUsers, totalSections, overallCompletion, archivedDocs });
+      },
+    },
+
+    "/api/trend": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const totalSections = (db.query("SELECT COUNT(*) as c FROM sections").get() as any).c;
+        const totalStaff = (db.query("SELECT COUNT(*) as c FROM users WHERE role != 'admin'").get() as any).c;
+        const maxPossible = totalSections * totalStaff;
+
+        const history = db.query(
+          "SELECT DATE(created_at) as day, action, COUNT(*) as cnt FROM tracking_history GROUP BY day, action ORDER BY day"
+        ).all() as any[];
+
+        const dayMap = new Map<string, { read: number; unread: number }>();
+        for (const row of history) {
+          const existing = dayMap.get(row.day) || { read: 0, unread: 0 };
+          if (row.action === "read") existing.read += row.cnt;
+          else existing.unread += row.cnt;
+          dayMap.set(row.day, existing);
+        }
+
+        let cumulative = 0;
+        const trend = Array.from(dayMap.entries()).map(([day, counts]) => {
+          cumulative += counts.read - counts.unread;
+          const pct = maxPossible > 0 ? Math.round((Math.max(0, cumulative) / maxPossible) * 100) : 0;
+          return { date: day, completionPct: pct, readCount: counts.read, unreadCount: counts.unread };
+        });
+
+        return json({ trend, totalSections, totalStaff, maxPossible });
       },
     },
 
@@ -544,6 +610,22 @@ const server = serve({
           editorName: v.editor_name,
           createdAt: v.created_at,
         })));
+      },
+    },
+
+    "/api/sections/:id/restore": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const { versionId } = await readBody(req);
+        const version = db.query("SELECT * FROM section_versions WHERE id = ? AND section_id = ?").get(versionId, id) as any;
+        if (!version) return notFound();
+        const section = db.query("SELECT * FROM sections WHERE id = ?").get(id) as any;
+        if (!section) return notFound();
+        db.query("UPDATE sections SET title = ?, content = ?, updated_at = ? WHERE id = ?").run(version.title, version.content, new Date().toISOString(), id);
+        addAuditLog(section.document_id, user.id, "section_restore", `Restored "${version.title}" to version from ${new Date(version.created_at).toLocaleDateString()}`);
+        return json({ ok: true });
       },
     },
 

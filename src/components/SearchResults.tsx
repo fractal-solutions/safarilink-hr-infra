@@ -9,6 +9,39 @@ interface SearchResultsProps {
   onSelectDoc: (docId: string) => void;
 }
 
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(${escaped})`, "gi");
+  const parts = text.split(regex);
+  return parts.map((part, i) =>
+    regex.test(part) ? (
+      <mark key={i} className="bg-sf-gold/30 text-sf-brown-dark rounded px-0.5 font-semibold">{part}</mark>
+    ) : (
+      part
+    )
+  );
+}
+
+function stripHtml(html: string) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || "";
+}
+
+function getSnippet(html: string, query: string, maxLen = 120): React.ReactNode {
+  const text = stripHtml(html);
+  if (!query.trim()) return text.slice(0, maxLen);
+  const lower = text.toLowerCase();
+  const qLower = query.toLowerCase();
+  const idx = lower.indexOf(qLower);
+  if (idx === -1) return text.slice(0, maxLen);
+  const start = Math.max(0, idx - 40);
+  const end = Math.min(text.length, idx + query.length + 80);
+  const snippet = (start > 0 ? "..." : "") + text.slice(start, end) + (end < text.length ? "..." : "");
+  return highlightMatch(snippet, query);
+}
+
 export function SearchResults({ query, onClose, onSelectDoc }: SearchResultsProps) {
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [sections, setSections] = useState<{ section: { id: string; title: string; content: string }; document_id: string; document_title: string }[]>([]);
@@ -29,12 +62,6 @@ export function SearchResults({ query, onClose, onSelectDoc }: SearchResultsProp
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
-
-  const stripHtml = (html: string) => {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || "";
-  };
 
   return (
     <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-sf-cream-dark dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-[70vh] overflow-y-auto">
@@ -65,7 +92,7 @@ export function SearchResults({ query, onClose, onSelectDoc }: SearchResultsProp
             >
               <FileText className="w-4 h-4 text-sf-gold shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{doc.title}</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{highlightMatch(doc.title, query)}</p>
                 <p className="text-xs text-slate-400">{doc.sections.length} sections</p>
               </div>
             </button>
@@ -82,9 +109,9 @@ export function SearchResults({ query, onClose, onSelectDoc }: SearchResultsProp
               onClick={() => { onSelectDoc(item.document_id); onClose(); }}
               className="w-full text-left p-3 rounded-lg hover:bg-sf-cream dark:hover:bg-slate-700 transition-colors"
             >
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.section.title}</p>
-              <p className="text-xs text-slate-400 truncate">{stripHtml(item.section.content).slice(0, 100)}</p>
-              <p className="text-[10px] text-sf-gold mt-1">in {item.document_title}</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{highlightMatch(item.section.title, query)}</p>
+              <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{getSnippet(item.section.content, query)}</p>
+              <p className="text-[10px] text-sf-gold mt-1">in {highlightMatch(item.document_title, query)}</p>
             </button>
           ))}
         </div>

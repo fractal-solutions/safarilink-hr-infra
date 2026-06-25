@@ -75,12 +75,18 @@ export async function updateEmail(userId: string, email: string): Promise<{ ok: 
 }
 
 export async function elevateUser(userId: string): Promise<boolean> {
-  const res = await request(`/users/${userId}/elevate`, { method: "POST" });
+  const res = await request(`/users/${userId}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role: "admin" }),
+  });
   return res !== null;
 }
 
 export async function demoteUser(userId: string): Promise<boolean> {
-  const res = await request(`/users/${userId}/demote`, { method: "POST" });
+  const res = await request(`/users/${userId}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role: "user" }),
+  });
   return res !== null;
 }
 
@@ -112,6 +118,15 @@ export async function updateDocument(id: string, data: Partial<PolicyDocument>):
 export async function deleteDocument(id: string): Promise<boolean> {
   const res = await request(`/documents/${id}`, { method: "DELETE" });
   return res !== null;
+}
+
+export async function restoreDocument(id: string): Promise<boolean> {
+  const res = await request(`/documents/${id}/restore`, { method: "POST" });
+  return res !== null;
+}
+
+export async function getTrash(): Promise<{ id: string; title: string; deletedAt: string }[]> {
+  return (await request<{ id: string; title: string; deletedAt: string }[]>("/documents/trash")) ?? [];
 }
 
 export async function duplicateDocument(id: string): Promise<PolicyDocument | null> {
@@ -185,9 +200,25 @@ export async function getAudit(docId: string): Promise<AuditEntry[]> {
   return (await request<AuditEntry[]>(`/documents/${docId}/audit`)) ?? [];
 }
 
+export async function getUserAudit(userId: string): Promise<AuditEntry[]> {
+  return (await request<AuditEntry[]>(`/users/${userId}/audit`)) ?? [];
+}
+
 // Stats
 export async function getStats(): Promise<{ totalPolicies: number; totalUsers: number; overallCompletion: number } | null> {
   return request("/stats");
+}
+
+// Trend
+export interface TrendPoint {
+  date: string;
+  completionPct: number;
+  readCount: number;
+  unreadCount: number;
+}
+
+export async function getTrend(): Promise<{ trend: TrendPoint[]; totalSections: number; totalStaff: number; maxPossible: number }> {
+  return (await request<{ trend: TrendPoint[]; totalSections: number; totalStaff: number; maxPossible: number }>("/trend")) ?? { trend: [], totalSections: 0, totalStaff: 0, maxPossible: 0 };
 }
 
 // Tags
@@ -219,6 +250,14 @@ export interface SectionVersion {
 
 export async function getSectionVersions(sectionId: string): Promise<SectionVersion[]> {
   return (await request<SectionVersion[]>(`/sections/${sectionId}/versions`)) ?? [];
+}
+
+export async function restoreSectionVersion(sectionId: string, versionId: string): Promise<boolean> {
+  const res = await request(`/sections/${sectionId}/restore`, {
+    method: "POST",
+    body: JSON.stringify({ versionId }),
+  });
+  return res !== null;
 }
 
 // Due Dates

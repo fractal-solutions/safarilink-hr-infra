@@ -13,9 +13,10 @@ import type { User } from "@/types";
 interface UserSettingsProps {
   isOpen: boolean;
   onClose: () => void;
+  currentUser?: User | null;
 }
 
-export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
+export function UserSettings({ isOpen, onClose, currentUser }: UserSettingsProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [editingPassword, setEditingPassword] = useState<string | null>(null);
@@ -125,7 +126,7 @@ export function UserSettings({ isOpen, onClose }: UserSettingsProps) {
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
-                  {u.id !== "usr-admin" && (
+                  {u.id !== currentUser?.id && (
                     <>
                       {confirmDelete === u.id ? (
                         <div className="flex items-center gap-1 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
