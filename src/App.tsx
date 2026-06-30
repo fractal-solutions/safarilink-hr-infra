@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import type { PolicyDocument, User } from "@/types";
 import * as api from "@/api";
 import { getSession, logout } from "@/auth";
+import { cn } from "@/lib/utils";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { DocumentReader } from "@/components/DocumentReader";
@@ -68,6 +69,19 @@ function AppInner() {
     await loadDocs();
     toast("Document restored", "success");
   }, [loadTrash, loadDocs, toast]);
+
+  const handleTrashDoc = useCallback(async (docId: string) => {
+    await api.deleteDocument(docId);
+    await loadDocs();
+    if (activeDocId === docId) setActiveDocId(null);
+    toast("Document moved to trash", "success");
+  }, [loadDocs, activeDocId, toast]);
+
+  const handleEditDueDate = useCallback(async (docId: string, dueDate: string | null) => {
+    await api.updateDocument(docId, { due_date: dueDate } as any);
+    await loadDocs();
+    toast("Due date updated", "success");
+  }, [loadDocs, toast]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -258,6 +272,39 @@ function AppInner() {
         onSearch={handleSearch}
       />
 
+      {/* Mobile sidebar toggle */}
+      <div className="sm:hidden px-4 py-2 border-b border-sf-cream-dark dark:border-slate-800">
+        <button
+          onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-800 rounded-xl border border-sf-cream-dark dark:border-slate-700 text-sm font-medium text-sf-brown dark:text-slate-100 shadow-xs"
+        >
+          <span className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-sf-gold" />
+            {activeDoc?.title || "Browse Policy Manuals"}
+          </span>
+          <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showMobileSidebar && "rotate-180")} />
+        </button>
+        {showMobileSidebar && (
+          <div className="mt-2 bg-white dark:bg-slate-800 rounded-xl border border-sf-cream-dark dark:border-slate-700 shadow-lg max-h-[60vh] overflow-y-auto">
+            <Sidebar
+              documents={documents}
+              activeDocId={viewingOverallAnalytics || viewingDueDates ? null : activeDocId}
+              currentRole={user.role}
+              tracking={tracking}
+              activeUserId={user.id}
+              onSelectDoc={(id) => { handleSelectDoc(id); setShowMobileSidebar(false); }}
+              onCreateDoc={() => { setShowNewDoc(true); setShowMobileSidebar(false); }}
+              onReorder={handleReorder}
+              onTrash={handleTrashDoc}
+              onEditDueDate={handleEditDueDate}
+              searchQuery={searchQuery}
+              isOpen
+              onClose={() => setShowMobileSidebar(false)}
+            />
+          </div>
+        )}
+      </div>
+
       <AuthModal isOpen={false} onAuth={handleAuth} />
       <UserSettings isOpen={showSettings} onClose={() => setShowSettings(false)} currentUser={user} />
       <NewDocModal
@@ -326,17 +373,21 @@ function AppInner() {
       )}
 
       <main className="flex-1 flex max-w-[1600px] w-full mx-auto p-6 gap-6 overflow-hidden min-h-0">
-        <Sidebar
-          documents={documents}
-          activeDocId={viewingOverallAnalytics || viewingDueDates ? null : activeDocId}
-          currentRole={user.role}
-          tracking={tracking}
-          activeUserId={user.id}
-          onSelectDoc={handleSelectDoc}
-          onCreateDoc={() => setShowNewDoc(true)}
-          onReorder={handleReorder}
-          searchQuery={searchQuery}
-        />
+        <div className="hidden sm:block">
+          <Sidebar
+            documents={documents}
+            activeDocId={viewingOverallAnalytics || viewingDueDates ? null : activeDocId}
+            currentRole={user.role}
+            tracking={tracking}
+            activeUserId={user.id}
+            onSelectDoc={handleSelectDoc}
+            onCreateDoc={() => setShowNewDoc(true)}
+            onReorder={handleReorder}
+            onTrash={handleTrashDoc}
+            onEditDueDate={handleEditDueDate}
+            searchQuery={searchQuery}
+          />
+        </div>
 
         <section className="flex-1 flex flex-col gap-6 min-h-0">
           {isAdmin && (

@@ -248,6 +248,44 @@ const server = serve({
       },
     },
 
+    "/api/documents/trash": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const docs = db.query("SELECT * FROM documents WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC").all() as any[];
+        return json(docs.map((d: any) => ({ id: d.id, title: d.title, deletedAt: d.deleted_at })));
+      },
+    },
+
+    "/api/documents/:id": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const doc = db.query("SELECT * FROM documents WHERE id = ?").get(id) as any;
+        if (!doc) return notFound();
+        const body = await readBody(req);
+        const title = body.title ?? doc.title;
+        const archived = body.archived !== undefined ? (body.archived ? 1 : 0) : doc.archived;
+        const dueDate = body.dueDate !== undefined ? body.dueDate : doc.due_date;
+        const now = new Date().toISOString();
+        db.query("UPDATE documents SET title = ?, archived = ?, due_date = ?, updated_at = ? WHERE id = ?").run(title, archived, dueDate, now, id);
+        addAuditLog(id, user.id, "document_update", `Updated document "${title}"`);
+        return json({ ok: true });
+      },
+
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const doc = db.query("SELECT * FROM documents WHERE id = ? AND (deleted_at IS NULL)").get(id) as any;
+        if (!doc) return notFound();
+        db.query("UPDATE documents SET deleted_at = ? WHERE id = ?").run(new Date().toISOString(), id);
+        addAuditLog(id, user.id, "document_trash", `Moved "${doc.title}" to trash`);
+        return json({ ok: true });
+      },
+    },
+
     "/api/documents/:id/restore": {
       async POST(req) {
         const user = getSessionUser(req);
@@ -258,15 +296,6 @@ const server = serve({
         db.query("UPDATE documents SET deleted_at = NULL WHERE id = ?").run(id);
         addAuditLog(id, user.id, "document_restore", `Restored "${doc.title}" from trash`);
         return json({ ok: true });
-      },
-    },
-
-    "/api/documents/trash": {
-      async GET(req) {
-        const user = getSessionUser(req);
-        if (!user || user.role !== "admin") return forbidden();
-        const docs = db.query("SELECT * FROM documents WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC").all() as any[];
-        return json(docs.map((d: any) => ({ id: d.id, title: d.title, deletedAt: d.deleted_at })));
       },
     },
 
