@@ -1,26 +1,31 @@
-import { X } from "lucide-react";
+import { X, Building2 } from "lucide-react";
 import { useState } from "react";
 import { TagsInput } from "./TagsInput";
+import type { Department } from "@/types";
 
 interface NewDocModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, dueDate?: string | null, tags?: string[]) => void;
+  onSave: (title: string, dueDate?: string | null, tags?: string[], departmentId?: string | null) => void;
+  departments?: Department[];
+  preselectedDepartmentId?: string | null;
 }
 
-export function NewDocModal({ isOpen, onClose, onSave }: NewDocModalProps) {
+export function NewDocModal({ isOpen, onClose, onSave, departments = [], preselectedDepartmentId }: NewDocModalProps) {
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [departmentId, setDepartmentId] = useState<string>(preselectedDepartmentId ?? "");
 
   if (!isOpen) return null;
 
   const handleSave = () => {
     if (!title.trim()) return;
-    onSave(title.trim(), dueDate || null, tags);
+    onSave(title.trim(), dueDate || null, tags, departmentId || null);
     setTitle("");
     setDueDate("");
     setTags([]);
+    setDepartmentId(preselectedDepartmentId ?? "");
   };
 
   return (
@@ -59,6 +64,23 @@ export function NewDocModal({ isOpen, onClose, onSave }: NewDocModalProps) {
               className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
             />
           </div>
+          {departments.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Building2 className="w-3 h-3" /> Department
+              </label>
+              <select
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+              >
+                <option value="">No department</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
               Tags <span className="text-slate-400 dark:text-slate-500 normal-case">(optional)</span>

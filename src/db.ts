@@ -79,6 +79,48 @@ db.exec(`
     edited_by TEXT REFERENCES users(id),
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS departments (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    color TEXT NOT NULL DEFAULT '#5C3A1E',
+    icon TEXT DEFAULT 'building',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS announcements (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL DEFAULT 'info',
+    department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+    priority INTEGER NOT NULL DEFAULT 0,
+    is_pinned INTEGER NOT NULL DEFAULT 0,
+    image_url TEXT,
+    emoji TEXT,
+    grid_size TEXT NOT NULL DEFAULT 'medium',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS banners (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    subtitle TEXT DEFAULT '',
+    bg_color TEXT NOT NULL DEFAULT '#5C3A1E',
+    text_color TEXT NOT NULL DEFAULT '#FFFFFF',
+    gradient TEXT,
+    image_url TEXT,
+    link_url TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+  );
 `);
 
 // Migration: add email column if missing
@@ -89,12 +131,84 @@ try {
   if (!e.message?.includes("duplicate column")) console.error("Migration email:", e.message);
 }
 
+// Migration: add theme column to users
+try {
+  db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'safari'");
+  console.log("Migration: added theme column to users");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration theme:", e.message);
+}
+
+// Migration: add payroll_id column to users
+try {
+  db.exec("ALTER TABLE users ADD COLUMN payroll_id TEXT");
+  console.log("Migration: added payroll_id column to users");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration payroll_id:", e.message);
+}
+
 // Migration: add deleted_at column for soft delete
 try {
   db.exec("ALTER TABLE documents ADD COLUMN deleted_at TEXT");
   console.log("Migration: added deleted_at column to documents");
 } catch (e: any) {
   if (!e.message?.includes("duplicate column")) console.error("Migration deleted_at:", e.message);
+}
+
+// Migration: add updated_at column to documents
+try {
+  db.exec("ALTER TABLE documents ADD COLUMN updated_at TEXT");
+  console.log("Migration: added updated_at column to documents");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration documents updated_at:", e.message);
+}
+
+// Migration: add department_id column to documents
+try {
+  db.exec("ALTER TABLE documents ADD COLUMN department_id TEXT REFERENCES departments(id) ON DELETE SET NULL");
+  console.log("Migration: added department_id column to documents");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration department_id:", e.message);
+}
+
+// Migration: add image_url and emoji to announcements
+try {
+  db.exec("ALTER TABLE announcements ADD COLUMN image_url TEXT");
+  console.log("Migration: added image_url to announcements");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration announcements image_url:", e.message);
+}
+try {
+  db.exec("ALTER TABLE announcements ADD COLUMN emoji TEXT");
+  console.log("Migration: added emoji to announcements");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration announcements emoji:", e.message);
+}
+try {
+  db.exec("ALTER TABLE announcements ADD COLUMN grid_size TEXT NOT NULL DEFAULT 'medium'");
+  console.log("Migration: added grid_size to announcements");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration announcements grid_size:", e.message);
+}
+try {
+  db.exec("ALTER TABLE announcements ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+  console.log("Migration: added sort_order to announcements");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration announcements sort_order:", e.message);
+}
+
+// Migration: add gradient and image_url to banners
+try {
+  db.exec("ALTER TABLE banners ADD COLUMN gradient TEXT");
+  console.log("Migration: added gradient to banners");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration banners gradient:", e.message);
+}
+try {
+  db.exec("ALTER TABLE banners ADD COLUMN image_url TEXT");
+  console.log("Migration: added image_url to banners");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration banners image_url:", e.message);
 }
 
 // Tracking history table for trend data
@@ -117,8 +231,21 @@ if (userCount.cnt === 0) {
   );
 
   db.run(
-    `INSERT INTO documents (id, title, sort_order, archived, created_at) VALUES (?, ?, ?, ?, ?)`,
-    ["doc-1", "Safarilink Ground Operations Policy", 0, 0, now]
+    `INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ["dept-hr", "Human Resources", "hr", "#5C3A1E", "users", 0, now]
+  );
+  db.run(
+    `INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ["dept-finance", "Finance", "finance", "#1E5C3A", "calculator", 1, now]
+  );
+  db.run(
+    `INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ["dept-ops", "Operations", "operations", "#3A1E5C", "settings", 2, now]
+  );
+
+  db.run(
+    `INSERT INTO documents (id, title, sort_order, archived, created_at, department_id) VALUES (?, ?, ?, ?, ?, ?)`,
+    ["doc-1", "Safarilink Ground Operations Policy", 0, 0, now, "dept-ops"]
   );
 
   db.run(
@@ -147,8 +274,8 @@ if (userCount.cnt === 0) {
   );
 
   db.run(
-    `INSERT INTO documents (id, title, sort_order, archived, created_at) VALUES (?, ?, ?, ?, ?)`,
-    ["doc-2", "In-Flight Cabin Crew Procedures", 1, 0, now]
+    `INSERT INTO documents (id, title, sort_order, archived, created_at, department_id) VALUES (?, ?, ?, ?, ?, ?)`,
+    ["doc-2", "In-Flight Cabin Crew Procedures", 1, 0, now, "dept-hr"]
   );
 
   db.run(
@@ -164,7 +291,7 @@ if (userCount.cnt === 0) {
     ]
   );
 
-  console.log("Database seeded with default admin and documents.");
+  console.log("Database seeded with default admin, departments, and documents.");
 }
 
 export default db;

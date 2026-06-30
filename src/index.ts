@@ -72,11 +72,13 @@ const server = serve({
         const { username, password } = await readBody(req);
         if (!username || !password) return json({ error: "Username and password required" }, 400);
 
-        const user = db.query("SELECT * FROM users WHERE username = ? AND password = ?").get(username, password) as any;
-        if (!user) return json({ error: "Invalid username or password" }, 401);
+        const user = db.query(
+          `SELECT * FROM users WHERE (username = ? OR payroll_id = ?) AND (password = ? OR payroll_id = ?)`
+        ).get(username, username, password, password) as any;
+        if (!user) return json({ error: "Invalid credentials" }, 401);
 
         const token = createSession(user.id);
-        const res = json({ user: { id: user.id, username: user.username, displayName: user.display_name, email: user.email, role: user.role } });
+        const res = json({ user: { id: user.id, username: user.username, displayName: user.display_name, email: user.email, payrollId: user.payroll_id, role: user.role, theme: user.theme || "safari" } });
         return cookieSet(res, token);
       },
     },
@@ -87,20 +89,23 @@ const server = serve({
         if (!checkRateLimit(`register:${ip}`, 5, 60_000)) {
           return json({ error: "Too many registration attempts. Try again in a minute." }, 429);
         }
-        const { username, password, displayName } = await readBody(req);
-        if (!username || !password || !displayName) return json({ error: "All fields required" }, 400);
+        const { username, password, displayName, payrollId } = await readBody(req);
+        if (!username || !password || !displayName || !payrollId) return json({ error: "All fields required" }, 400);
 
         const existing = db.query("SELECT id FROM users WHERE username = ?").get(username);
         if (existing) return json({ error: "Username already exists" }, 409);
 
+        const existingPayroll = db.query("SELECT id FROM users WHERE payroll_id = ?").get(payrollId);
+        if (existingPayroll) return json({ error: "Payroll ID already registered" }, 409);
+
         const id = `usr-${crypto.randomUUID()}`;
         const now = new Date().toISOString();
         db.query(
-          "INSERT INTO users (id, username, password, display_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-        ).run(id, username, password, displayName, "user", now);
+          "INSERT INTO users (id, username, password, display_name, payroll_id, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(id, username, password, displayName, payrollId, "user", now);
 
         const token = createSession(id);
-        const res = json({ user: { id, username, displayName, email: null, role: "user" } });
+        const res = json({ user: { id, username, displayName, email: null, payrollId, role: "user", theme: "safari" } });
         return cookieSet(res, token);
       },
     },
@@ -124,7 +129,7 @@ const server = serve({
       async GET(req) {
         const user = getSessionUser(req);
         if (!user) return unauthorized();
-        return json({ user: { id: user.id, username: user.username, displayName: user.display_name, email: user.email, role: user.role } });
+        return json({ user: { id: user.id, username: user.username, displayName: user.display_name, email: user.email, payrollId: user.payroll_id, role: user.role, theme: user.theme || "safari" } });
       },
     },
 
@@ -134,8 +139,8 @@ const server = serve({
       async GET(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
-        const users = db.query("SELECT id, username, display_name, email, role, created_at FROM users").all();
-        return json({ users: users.map((u: any) => ({ id: u.id, username: u.username, displayName: u.display_name, email: u.email, role: u.role, createdAt: u.created_at })) });
+        const users = db.query("SELECT id, username, display_name, email, payroll_id, role, created_at FROM users").all();
+        return json({ users: users.map((u: any) => ({ id: u.id, username: u.username, displayName: u.display_name, email: u.email, payrollId: u.payroll_id, role: u.role, createdAt: u.created_at })) });
       },
     },
 
@@ -165,6 +170,20 @@ const server = serve({
         if (!email || !email.includes("@")) return json({ error: "Valid email required" }, 400);
         db.query("UPDATE users SET email = ? WHERE id = ?").run(email, id);
         return json({ ok: true });
+      },
+    },
+
+    "/api/users/:id/theme": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        if (user.id !== id) return forbidden();
+        const { theme } = await readBody(req);
+        const validThemes = ["safari", "ocean", "forest", "sunset", "royal", "midnight", "rose", "emerald"];
+        if (!theme || !validThemes.includes(theme)) return json({ error: "Invalid theme" }, 400);
+        db.query("UPDATE users SET theme = ? WHERE id = ?").run(theme, id);
+        return json({ ok: true, theme });
       },
     },
 
@@ -216,6 +235,7 @@ const server = serve({
             sortOrder: doc.sort_order,
             archived: !!doc.archived,
             dueDate: doc.due_date,
+            departmentId: doc.department_id,
             createdAt: doc.created_at,
             updatedAt: doc.updated_at,
             tags,
@@ -235,16 +255,16 @@ const server = serve({
       async POST(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
-        const { title } = await readBody(req);
+        const { title, departmentId } = await readBody(req);
         if (!title) return json({ error: "Title required" }, 400);
         const id = `doc-${crypto.randomUUID()}`;
         const now = new Date().toISOString();
         const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM documents").get() as any).m ?? -1;
         db.query(
-          "INSERT INTO documents (id, title, sort_order, archived, created_at) VALUES (?, ?, ?, ?, ?)"
-        ).run(id, title, maxOrder + 1, 0, now);
+          "INSERT INTO documents (id, title, sort_order, archived, created_at, department_id) VALUES (?, ?, ?, ?, ?, ?)"
+        ).run(id, title, maxOrder + 1, 0, now, departmentId || null);
         addAuditLog(id, user.id, "document_create", `Created document "${title}"`);
-        return json({ id, title, sortOrder: maxOrder + 1, archived: false, sections: [] }, 201);
+        return json({ id, title, sortOrder: maxOrder + 1, archived: false, departmentId: departmentId || null, sections: [] }, 201);
       },
     },
 
@@ -268,8 +288,9 @@ const server = serve({
         const title = body.title ?? doc.title;
         const archived = body.archived !== undefined ? (body.archived ? 1 : 0) : doc.archived;
         const dueDate = body.dueDate !== undefined ? body.dueDate : doc.due_date;
+        const departmentId = body.departmentId !== undefined ? (body.departmentId || null) : doc.department_id;
         const now = new Date().toISOString();
-        db.query("UPDATE documents SET title = ?, archived = ?, due_date = ?, updated_at = ? WHERE id = ?").run(title, archived, dueDate, now, id);
+        db.query("UPDATE documents SET title = ?, archived = ?, due_date = ?, department_id = ?, updated_at = ? WHERE id = ?").run(title, archived, dueDate, departmentId, now, id);
         addAuditLog(id, user.id, "document_update", `Updated document "${title}"`);
         return json({ ok: true });
       },
@@ -311,8 +332,8 @@ const server = serve({
         const now = new Date().toISOString();
         const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM documents").get() as any).m ?? -1;
         db.query(
-          "INSERT INTO documents (id, title, sort_order, archived, due_date, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-        ).run(newDocId, `${doc.title} (Copy)`, maxOrder + 1, doc.archived, doc.due_date, now);
+          "INSERT INTO documents (id, title, sort_order, archived, due_date, department_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(newDocId, `${doc.title} (Copy)`, maxOrder + 1, doc.archived, doc.due_date, doc.department_id, now);
 
         const sections = db.query("SELECT * FROM sections WHERE document_id = ? ORDER BY sort_order").all(id);
         for (const sec of sections) {
@@ -728,6 +749,262 @@ const server = serve({
         db.exec("PRAGMA foreign_keys = ON");
         addAuditLog(null, user.id, "data_import", `Imported ${data.documents?.length ?? 0} documents`);
         return json({ ok: true, imported: { documents: data.documents?.length ?? 0, sections: data.sections?.length ?? 0 } });
+      },
+    },
+
+    // ─── Departments ─────────────────────────────────────────
+
+    "/api/departments": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const depts = db.query("SELECT * FROM departments ORDER BY sort_order").all();
+        return json(depts.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          slug: d.slug,
+          color: d.color,
+          icon: d.icon,
+          sortOrder: d.sort_order,
+          createdAt: d.created_at,
+        })));
+      },
+
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { name, color, icon } = await readBody(req);
+        if (!name || !name.trim()) return json({ error: "Name required" }, 400);
+        const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const existing = db.query("SELECT id FROM departments WHERE slug = ?").get(slug);
+        if (existing) return json({ error: "Department already exists" }, 409);
+        const id = `dept-${crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+        const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM departments").get() as any).m ?? -1;
+        db.query(
+          "INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(id, name.trim(), slug, color || "#5C3A1E", icon || "building", maxOrder + 1, now);
+        addAuditLog(null, user.id, "department_create", `Created department "${name.trim()}"`);
+        return json({ id, name: name.trim(), slug, color: color || "#5C3A1E", icon: icon || "building", sortOrder: maxOrder + 1 }, 201);
+      },
+    },
+
+    "/api/departments/:id": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const dept = db.query("SELECT * FROM departments WHERE id = ?").get(id) as any;
+        if (!dept) return notFound();
+        const body = await readBody(req);
+        const name = body.name ?? dept.name;
+        const color = body.color ?? dept.color;
+        const icon = body.icon ?? dept.icon;
+        const sortOrder = body.sortOrder ?? dept.sort_order;
+        db.query("UPDATE departments SET name = ?, color = ?, icon = ?, sort_order = ? WHERE id = ?").run(name, color, icon, sortOrder, id);
+        addAuditLog(null, user.id, "department_update", `Updated department "${name}"`);
+        return json({ ok: true });
+      },
+
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const dept = db.query("SELECT * FROM departments WHERE id = ?").get(id) as any;
+        if (!dept) return notFound();
+        db.query("UPDATE documents SET department_id = NULL WHERE department_id = ?").run(id);
+        db.query("UPDATE announcements SET department_id = NULL WHERE department_id = ?").run(id);
+        db.query("DELETE FROM departments WHERE id = ?").run(id);
+        addAuditLog(null, user.id, "department_delete", `Deleted department "${dept.name}"`);
+        return json({ ok: true });
+      },
+    },
+
+    // ─── Announcements ───────────────────────────────────────
+
+    "/api/announcements": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const now = new Date().toISOString();
+        const rows = db.query(
+          `SELECT a.*, d.name as department_name, d.color as department_color, u.display_name as author_name
+           FROM announcements a
+           LEFT JOIN departments d ON a.department_id = d.id
+           LEFT JOIN users u ON a.created_by = u.id
+           WHERE (a.expires_at IS NULL OR a.expires_at > ?)
+           ORDER BY a.is_pinned DESC, a.sort_order ASC, a.priority DESC, a.created_at DESC`
+        ).all(now);
+        return json(rows.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          content: r.content,
+          type: r.type,
+          departmentId: r.department_id,
+          departmentName: r.department_name,
+          departmentColor: r.department_color,
+          priority: r.priority,
+          isPinned: !!r.is_pinned,
+          imageUrl: r.image_url,
+          emoji: r.emoji,
+          gridSize: r.grid_size || 'medium',
+          sortOrder: r.sort_order,
+          expiresAt: r.expires_at,
+          createdBy: r.created_by,
+          authorName: r.author_name,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        })));
+      },
+
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { title, content, type, departmentId, priority, isPinned, imageUrl, emoji, gridSize, expiresAt } = await readBody(req);
+        if (!title || !title.trim()) return json({ error: "Title required" }, 400);
+        const id = `ann-${crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+        const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM announcements").get() as any).m ?? -1;
+        db.query(
+          `INSERT INTO announcements (id, title, content, type, department_id, priority, is_pinned, image_url, emoji, grid_size, sort_order, expires_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          id, title.trim(), content || "", type || "info",
+          departmentId || null, priority ?? 0, isPinned ? 1 : 0,
+          imageUrl || null, emoji || null, gridSize || "medium", maxOrder + 1,
+          expiresAt || null, user.id, now, now
+        );
+        addAuditLog(null, user.id, "announcement_create", `Created announcement "${title.trim()}"`);
+        return json({ id }, 201);
+      },
+    },
+
+    "/api/announcements/:id": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const ann = db.query("SELECT * FROM announcements WHERE id = ?").get(id) as any;
+        if (!ann) return notFound();
+        const body = await readBody(req);
+        const now = new Date().toISOString();
+        db.query(
+          `UPDATE announcements SET title = ?, content = ?, type = ?, department_id = ?, priority = ?, is_pinned = ?, image_url = ?, emoji = ?, grid_size = ?, expires_at = ?, updated_at = ? WHERE id = ?`
+        ).run(
+          body.title ?? ann.title,
+          body.content !== undefined ? body.content : ann.content,
+          body.type ?? ann.type,
+          body.departmentId !== undefined ? (body.departmentId || null) : ann.department_id,
+          body.priority ?? ann.priority,
+          body.isPinned !== undefined ? (body.isPinned ? 1 : 0) : ann.is_pinned,
+          body.imageUrl !== undefined ? (body.imageUrl || null) : ann.image_url,
+          body.emoji !== undefined ? (body.emoji || null) : ann.emoji,
+          body.gridSize ?? ann.grid_size,
+          body.expiresAt !== undefined ? (body.expiresAt || null) : ann.expires_at,
+          now, id
+        );
+        addAuditLog(null, user.id, "announcement_update", `Updated announcement "${body.title ?? ann.title}"`);
+        return json({ ok: true });
+      },
+
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const ann = db.query("SELECT * FROM announcements WHERE id = ?").get(id) as any;
+        if (!ann) return notFound();
+        db.query("DELETE FROM announcements WHERE id = ?").run(id);
+        addAuditLog(null, user.id, "announcement_delete", `Deleted announcement "${ann.title}"`);
+        return json({ ok: true });
+      },
+    },
+
+    "/api/announcements/reorder": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { order } = await readBody(req);
+        if (!Array.isArray(order)) return json({ error: "order array required" }, 400);
+        for (const item of order) {
+          db.query("UPDATE announcements SET sort_order = ? WHERE id = ?").run(item.sort_order, item.id);
+        }
+        return json({ ok: true });
+      },
+    },
+
+    // ─── Banners ─────────────────────────────────────────────
+
+    "/api/banners": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const rows = db.query("SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order").all();
+        return json(rows.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          subtitle: r.subtitle,
+          bgColor: r.bg_color,
+          textColor: r.text_color,
+          gradient: r.gradient,
+          imageUrl: r.image_url,
+          linkUrl: r.link_url,
+          sortOrder: r.sort_order,
+          isActive: !!r.is_active,
+          createdAt: r.created_at,
+        })));
+      },
+
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { title, subtitle, bgColor, textColor, gradient, imageUrl, linkUrl } = await readBody(req);
+        if (!title || !title.trim()) return json({ error: "Title required" }, 400);
+        const id = `banner-${crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+        const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM banners").get() as any).m ?? -1;
+        db.query(
+          `INSERT INTO banners (id, title, subtitle, bg_color, text_color, gradient, image_url, link_url, sort_order, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
+        ).run(id, title.trim(), subtitle || "", bgColor || "#5C3A1E", textColor || "#FFFFFF", gradient || null, imageUrl || null, linkUrl || null, maxOrder + 1, now);
+        addAuditLog(null, user.id, "banner_create", `Created banner "${title.trim()}"`);
+        return json({ id }, 201);
+      },
+    },
+
+    "/api/banners/:id": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const banner = db.query("SELECT * FROM banners WHERE id = ?").get(id) as any;
+        if (!banner) return notFound();
+        const body = await readBody(req);
+        db.query(
+          `UPDATE banners SET title = ?, subtitle = ?, bg_color = ?, text_color = ?, gradient = ?, image_url = ?, link_url = ?, sort_order = ?, is_active = ? WHERE id = ?`
+        ).run(
+          body.title ?? banner.title,
+          body.subtitle !== undefined ? body.subtitle : banner.subtitle,
+          body.bgColor ?? banner.bg_color,
+          body.textColor ?? banner.text_color,
+          body.gradient !== undefined ? (body.gradient || null) : banner.gradient,
+          body.imageUrl !== undefined ? (body.imageUrl || null) : banner.image_url,
+          body.linkUrl !== undefined ? (body.linkUrl || null) : banner.link_url,
+          body.sortOrder ?? banner.sort_order,
+          body.isActive !== undefined ? (body.isActive ? 1 : 0) : banner.is_active,
+          id
+        );
+        addAuditLog(null, user.id, "banner_update", `Updated banner "${body.title ?? banner.title}"`);
+        return json({ ok: true });
+      },
+
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const banner = db.query("SELECT * FROM banners WHERE id = ?").get(id) as any;
+        if (!banner) return notFound();
+        db.query("DELETE FROM banners WHERE id = ?").run(id);
+        addAuditLog(null, user.id, "banner_delete", `Deleted banner "${banner.title}"`);
+        return json({ ok: true });
       },
     },
 

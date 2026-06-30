@@ -1,4 +1,4 @@
-import type { PolicyDocument, User, AuditEntry } from "@/types";
+import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner } from "@/types";
 
 const API_BASE = "/api";
 
@@ -37,10 +37,10 @@ export async function login(username: string, password: string): Promise<User | 
   return res?.user ?? null;
 }
 
-export async function register(username: string, password: string, displayName: string): Promise<User | null> {
+export async function register(username: string, password: string, displayName: string, payrollId: string): Promise<User | null> {
   const res = await request<{ user: User }>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ username, password, displayName }),
+    body: JSON.stringify({ username, password, displayName, payrollId }),
   });
   return res?.user ?? null;
 }
@@ -72,6 +72,13 @@ export async function updateEmail(userId: string, email: string): Promise<{ ok: 
     method: "PUT",
     body: JSON.stringify({ email }),
   })) ?? { ok: false, error: "Request failed" };
+}
+
+export async function updateTheme(userId: string, theme: string): Promise<{ ok: boolean; theme?: string }> {
+  return (await request(`/users/${userId}/theme`, {
+    method: "PUT",
+    body: JSON.stringify({ theme }),
+  })) ?? { ok: false };
 }
 
 export async function elevateUser(userId: string): Promise<boolean> {
@@ -283,4 +290,108 @@ export async function exportData(): Promise<any> {
 
 export async function importData(data: any): Promise<{ ok: boolean; imported?: any }> {
   return (await request("/import", { method: "POST", body: JSON.stringify(data) })) ?? { ok: false };
+}
+
+// Departments
+export async function getDepartments(): Promise<Department[]> {
+  return (await request<Department[]>("/departments")) ?? [];
+}
+
+export async function createDepartment(name: string, color?: string, icon?: string): Promise<Department | null> {
+  return request<Department>("/departments", {
+    method: "POST",
+    body: JSON.stringify({ name, color, icon }),
+  });
+}
+
+export async function updateDepartment(id: string, data: Partial<Department>): Promise<boolean> {
+  const res = await request(`/departments/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  return res !== null;
+}
+
+export async function deleteDepartment(id: string): Promise<boolean> {
+  const res = await request(`/departments/${id}`, { method: "DELETE" });
+  return res !== null;
+}
+
+// Announcements
+export async function getAnnouncements(): Promise<Announcement[]> {
+  return (await request<Announcement[]>("/announcements")) ?? [];
+}
+
+export async function createAnnouncement(data: {
+  title: string;
+  content?: string;
+  type?: string;
+  departmentId?: string | null;
+  priority?: number;
+  isPinned?: boolean;
+  imageUrl?: string | null;
+  emoji?: string | null;
+  gridSize?: string;
+  expiresAt?: string | null;
+}): Promise<string | null> {
+  const res = await request<{ id: string }>("/announcements", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return res?.id ?? null;
+}
+
+export async function updateAnnouncement(id: string, data: Partial<Announcement>): Promise<boolean> {
+  const res = await request(`/announcements/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  return res !== null;
+}
+
+export async function deleteAnnouncement(id: string): Promise<boolean> {
+  const res = await request(`/announcements/${id}`, { method: "DELETE" });
+  return res !== null;
+}
+
+export async function reorderAnnouncements(order: { id: string; sort_order: number }[]): Promise<boolean> {
+  const res = await request("/announcements/reorder", {
+    method: "PUT",
+    body: JSON.stringify({ order }),
+  });
+  return res !== null;
+}
+
+// Banners
+export async function getBanners(): Promise<Banner[]> {
+  return (await request<Banner[]>("/banners")) ?? [];
+}
+
+export async function createBanner(data: {
+  title: string;
+  subtitle?: string;
+  bgColor?: string;
+  textColor?: string;
+  gradient?: string;
+  imageUrl?: string;
+  linkUrl?: string;
+}): Promise<string | null> {
+  const res = await request<{ id: string }>("/banners", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return res?.id ?? null;
+}
+
+export async function updateBanner(id: string, data: Partial<Banner>): Promise<boolean> {
+  const res = await request(`/banners/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  return res !== null;
+}
+
+export async function deleteBanner(id: string): Promise<boolean> {
+  const res = await request(`/banners/${id}`, { method: "DELETE" });
+  return res !== null;
 }

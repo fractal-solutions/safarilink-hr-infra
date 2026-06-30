@@ -7,21 +7,29 @@ import {
   Users,
   Crown,
   KeyRound,
+  Building2,
+  Palette,
 } from "lucide-react";
-import type { User } from "@/types";
+import type { User, Department } from "@/types";
+import { DepartmentManager } from "./DepartmentManager";
+import { ThemePicker } from "./ThemePicker";
 
 interface UserSettingsProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser?: User | null;
+  departments?: Department[];
+  onRefreshDepartments?: () => void;
+  onThemeChange?: (theme: string) => void;
 }
 
-export function UserSettings({ isOpen, onClose, currentUser }: UserSettingsProps) {
+export function UserSettings({ isOpen, onClose, currentUser, departments = [], onRefreshDepartments, onThemeChange }: UserSettingsProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [editingPassword, setEditingPassword] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [activeTab, setActiveTab] = useState<"users" | "departments" | "theme">("users");
 
   useEffect(() => {
     if (isOpen) {
@@ -81,7 +89,7 @@ export function UserSettings({ isOpen, onClose, currentUser }: UserSettingsProps
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 border border-sf-cream-dark max-h-[85vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-sf-brown flex items-center gap-2">
-            <Users className="w-5 h-5 text-sf-gold" /> User Management
+            <Users className="w-5 h-5 text-sf-gold" /> Settings
           </h3>
           <button
             onClick={onClose}
@@ -91,6 +99,56 @@ export function UserSettings({ isOpen, onClose, currentUser }: UserSettingsProps
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-1 mb-4 bg-sf-cream rounded-lg p-1">
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+              activeTab === "users"
+                ? "bg-white text-sf-brown shadow-xs"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" /> Users
+          </button>
+          <button
+            onClick={() => setActiveTab("departments")}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+              activeTab === "departments"
+                ? "bg-white text-sf-brown shadow-xs"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" /> Departments
+          </button>
+          <button
+            onClick={() => setActiveTab("theme")}
+            className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+              activeTab === "theme"
+                ? "bg-white text-sf-brown shadow-xs"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5" /> Theme
+          </button>
+        </div>
+
+        {activeTab === "departments" ? (
+          <div className="flex-1 overflow-y-auto">
+            <DepartmentManager
+              departments={departments}
+              onRefresh={onRefreshDepartments ?? (() => {})}
+            />
+          </div>
+        ) : activeTab === "theme" ? (
+          <div className="flex-1 overflow-y-auto p-1">
+            <ThemePicker
+              currentTheme={currentUser?.theme || "safari"}
+              onThemeChange={(t) => onThemeChange?.(t)}
+              userId={currentUser?.id || ""}
+            />
+          </div>
+        ) : (
         <div className="flex-1 overflow-y-auto divide-y divide-sf-cream-dark border border-sf-cream-dark rounded-lg">
           {users.map((u) => (
             <div key={u.id} className="p-3 hover:bg-sf-cream transition-colors">
@@ -116,6 +174,7 @@ export function UserSettings({ isOpen, onClose, currentUser }: UserSettingsProps
                     </div>
                     <span className="text-[11px] text-slate-400">
                       @{u.username}
+                      {u.payrollId && <span className="ml-1.5 text-sf-gold-dark font-medium">{u.payrollId}</span>}
                       {u.role === "admin" && (
                         <span className="ml-1.5 text-sf-gold-dark font-medium">
                           Admin
@@ -234,6 +293,7 @@ export function UserSettings({ isOpen, onClose, currentUser }: UserSettingsProps
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { PlaneTakeoff, Settings, LogOut, Moon, Sun, Search, Menu, X } from "lucide-react";
+import { Settings, LogOut, Moon, Sun, Search, Menu, X, LayoutDashboard, BookOpen } from "lucide-react";
 import type { User } from "@/types";
+import { cn } from "@/lib/utils";
 
 interface HeaderProps {
   user: User;
@@ -9,9 +10,11 @@ interface HeaderProps {
   isDark: boolean;
   onToggleDark: () => void;
   onSearch: (query: string) => void;
+  activeView: "bulletin" | "manuals";
+  onViewChange: (view: "bulletin" | "manuals") => void;
 }
 
-export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, onSearch }: HeaderProps) {
+export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, onSearch, activeView, onViewChange }: HeaderProps) {
   const isAdmin = user.role === "admin";
   const [searchQuery, setSearchQuery] = useState("");
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -39,22 +42,49 @@ export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, o
           </svg>
         </div>
         <div>
-          <h1 className="text-lg sm:text-xl font-bold tracking-wide font-[family-name:var(--font-display)]" style={{ fontFamily: "'Playfair Display', serif" }}>Safarilink</h1>
+          <h1 className="text-lg sm:text-xl font-bold tracking-wide" style={{ fontFamily: "'Playfair Display', serif" }}>Safarilink</h1>
           <p className="text-[10px] sm:text-xs text-sf-gold-light">HR Compliance & Policy Portal</p>
         </div>
       </div>
 
+      <nav className="hidden md:flex items-center bg-sf-brown-light/40 rounded-lg p-1">
+        <button
+          onClick={() => onViewChange("bulletin")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+            activeView === "bulletin"
+              ? "bg-sf-gold text-sf-brown shadow-sm"
+              : "text-sf-gold-light hover:text-white"
+          )}
+        >
+          <LayoutDashboard className="w-4 h-4" /> Bulletin Board
+        </button>
+        <button
+          onClick={() => onViewChange("manuals")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+            activeView === "manuals"
+              ? "bg-sf-gold text-sf-brown shadow-sm"
+              : "text-sf-gold-light hover:text-white"
+          )}
+        >
+          <BookOpen className="w-4 h-4" /> Policy Manuals
+        </button>
+      </nav>
+
       <div className="hidden md:flex items-center gap-3 relative">
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-sf-gold-light" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search policies..."
-            className="pl-9 pr-3 py-2 bg-sf-brown-light/50 border border-sf-brown-light rounded-lg text-sm text-white placeholder-sf-gold-light/60 focus:outline-none focus:ring-2 focus:ring-sf-gold w-48 lg:w-64 transition-all"
-          />
-        </div>
+        {activeView === "manuals" && (
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-sf-gold-light" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search policies..."
+              className="pl-9 pr-3 py-2 bg-sf-brown-light/50 border border-sf-brown-light rounded-lg text-sm text-white placeholder-sf-gold-light/60 focus:outline-none focus:ring-2 focus:ring-sf-gold w-48 lg:w-64 transition-all"
+            />
+          </div>
+        )}
 
         <button
           onClick={onToggleDark}
@@ -68,7 +98,7 @@ export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, o
           <button
             onClick={onOpenSettings}
             className="p-2 rounded-lg text-sf-gold-light hover:text-white hover:bg-sf-brown-light transition-colors"
-            title="User Management"
+            title="Settings"
           >
             <Settings className="w-4.5 h-4.5" />
           </button>
@@ -106,16 +136,43 @@ export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, o
 
       {showMobileMenu && (
         <div className="absolute top-full left-0 right-0 bg-sf-brown dark:bg-slate-900 border-t border-sf-brown-light dark:border-slate-700 p-4 space-y-3 md:hidden shadow-xl z-50">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-sf-gold-light" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Search policies..."
-              className="w-full pl-9 pr-3 py-2 bg-sf-brown-light/50 border border-sf-brown-light rounded-lg text-sm text-white placeholder-sf-gold-light/60 focus:outline-none focus:ring-2 focus:ring-sf-gold"
-            />
+          <div className="flex gap-1 bg-sf-brown-light/30 rounded-lg p-1">
+            <button
+              onClick={() => { onViewChange("bulletin"); setShowMobileMenu(false); }}
+              className={cn(
+                "flex items-center gap-2 flex-1 justify-center px-3 py-2 rounded-md text-sm font-medium transition-all",
+                activeView === "bulletin"
+                  ? "bg-sf-gold text-sf-brown"
+                  : "text-sf-gold-light hover:text-white"
+              )}
+            >
+              <LayoutDashboard className="w-4 h-4" /> Board
+            </button>
+            <button
+              onClick={() => { onViewChange("manuals"); setShowMobileMenu(false); }}
+              className={cn(
+                "flex items-center gap-2 flex-1 justify-center px-3 py-2 rounded-md text-sm font-medium transition-all",
+                activeView === "manuals"
+                  ? "bg-sf-gold text-sf-brown"
+                  : "text-sf-gold-light hover:text-white"
+              )}
+            >
+              <BookOpen className="w-4 h-4" /> Manuals
+            </button>
           </div>
+
+          {activeView === "manuals" && (
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-sf-gold-light" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search policies..."
+                className="w-full pl-9 pr-3 py-2 bg-sf-brown-light/50 border border-sf-brown-light rounded-lg text-sm text-white placeholder-sf-gold-light/60 focus:outline-none focus:ring-2 focus:ring-sf-gold"
+              />
+            </div>
+          )}
 
           <div className="flex items-center gap-2 text-sm text-sf-gold-light">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${isAdmin ? "bg-sf-gold text-sf-brown" : "bg-sf-brown-light text-sf-gold-light"}`}>

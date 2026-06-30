@@ -17,10 +17,11 @@ export async function loginUser(
 export async function registerUser(
   username: string,
   password: string,
-  displayName: string
+  displayName: string,
+  payrollId: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const user = await api.register(username, password, displayName);
+    const user = await api.register(username, password, displayName, payrollId);
     if (user) return { ok: true };
     return { ok: false, error: "Registration failed" };
   } catch (e: any) {

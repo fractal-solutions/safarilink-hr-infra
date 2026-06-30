@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
-import { BookOpen, ChevronRight, Plus, GripVertical, Calendar, Archive, X, Tag, Trash2, Pencil } from "lucide-react";
-import type { PolicyDocument, UserRole } from "@/types";
+import { BookOpen, ChevronRight, Plus, GripVertical, Calendar, Archive, X, Tag, Trash2, Pencil, Building2 } from "lucide-react";
+import type { PolicyDocument, UserRole, Department } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -17,6 +17,9 @@ interface SidebarProps {
   searchQuery?: string;
   isOpen?: boolean;
   onClose?: () => void;
+  departments?: Department[];
+  activeDepartmentId?: string | null;
+  onSelectDepartment?: (deptId: string | null) => void;
 }
 
 export function Sidebar({
@@ -33,6 +36,9 @@ export function Sidebar({
   searchQuery = "",
   isOpen = false,
   onClose,
+  departments = [],
+  activeDepartmentId = null,
+  onSelectDepartment,
 }: SidebarProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -94,7 +100,9 @@ export function Sidebar({
             s.content.toLowerCase().includes(q)
         );
       })
-    : documents;
+    : activeDepartmentId
+      ? documents.filter((doc) => doc.departmentId === activeDepartmentId)
+      : documents;
 
   const startEditDueDate = (docId: string, currentDate: string | null) => {
     setEditingDueDate(docId);
@@ -108,7 +116,7 @@ export function Sidebar({
 
   const sidebarContent = (
     <aside className={cn(
-      "w-full sm:w-1/4 sm:min-w-[280px] bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-sf-cream-dark dark:border-slate-700 p-4 flex flex-col min-h-0",
+      "w-full sm:w-[300px] sm:shrink-0 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-sf-cream-dark dark:border-slate-700 p-4 flex flex-col min-h-0",
       !isOpen && "hidden sm:flex"
     )}>
       <div className="flex justify-between items-center mb-4 pb-2 border-b border-sf-cream-dark dark:border-slate-800">

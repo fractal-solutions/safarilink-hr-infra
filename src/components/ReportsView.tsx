@@ -156,11 +156,12 @@ export function ReportsView({
   };
 
   const exportCSV = () => {
-    const headers = ["Name", "Username", "Email", ...docs.map((d) => d.title), "Overall %", "Status"];
+    const headers = ["Name", "Payroll ID", "Username", "Email", ...docs.map((d) => d.title), "Overall %", "Status"];
     const rows = filteredUsers.map((u) => {
       const status = u.overallPct === 100 ? "Compliant" : u.overallPct === 0 ? "Not Started" : "In Progress";
       return [
         u.displayName,
+        u.payrollId || "",
         u.username,
         u.email || "",
         ...u.docStats.map((ds) => `${ds.read}/${ds.total} (${ds.pct}%)`),
@@ -210,7 +211,7 @@ export function ReportsView({
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
             <div>
               <div style="font-weight:700;font-size:0.9rem;color:#5C3A1E">${u.displayName}</div>
-              <div style="font-size:0.7rem;color:#888">@${u.username}${u.email ? ` · ${u.email}` : ""}</div>
+              <div style="font-size:0.7rem;color:#888">${u.payrollId ? `ID: ${u.payrollId} · ` : ""}@${u.username}${u.email ? ` · ${u.email}` : ""}</div>
             </div>
             <div style="text-align:right">
               <div style="font-size:1.3rem;font-weight:700;color:${u.overallPct === 100 ? '#5C3A1E' : u.overallPct > 0 ? '#C8A951' : '#999'}">${u.overallPct}%</div>
@@ -440,14 +441,12 @@ export function ReportsView({
                   <div className="w-10 h-10 rounded-full bg-sf-cream flex items-center justify-center font-bold text-sm text-sf-brown shrink-0">
                     {u.displayName.charAt(0).toUpperCase()}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-slate-900 truncate">{u.displayName}</span>
-                      <span className={cn("px-2 py-0.5 text-[10px] font-semibold rounded-md", status.className)}>
-                        {status.text}
-                      </span>
+                      {u.payrollId && <span className="text-[11px] text-sf-gold-dark font-medium shrink-0">{u.payrollId}</span>}
                     </div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-[11px] text-slate-400 truncate">
                       @{u.username}{u.email && <span className="ml-1.5 text-sf-gold-dark">{u.email}</span>}
                     </div>
                     <div className="w-full bg-sf-cream-dark rounded-full h-1.5 mt-2 overflow-hidden">
@@ -484,6 +483,7 @@ export function ReportsView({
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-bold text-sf-brown dark:text-slate-100">{selectedUser.displayName}</h3>
                 <p className="text-xs text-slate-400">
+                  {selectedUser.payrollId && <span className="text-sf-gold-dark font-medium mr-1.5">{selectedUser.payrollId}</span>}
                   @{selectedUser.username}{selectedUser.email && <span className="ml-1.5 text-sf-gold-dark">{selectedUser.email}</span>}
                 </p>
               </div>

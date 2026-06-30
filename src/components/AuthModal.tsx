@@ -12,6 +12,7 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [payrollId, setPayrollId] = useState("");
   const [error, setError] = useState("");
 
   if (!isOpen) return null;
@@ -25,16 +26,16 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
         setPassword("");
         onAuth();
       } else {
-        setError("Invalid username or password");
+        setError("Invalid credentials");
       }
     } catch {
-      setError("Invalid username or password");
+      setError("Invalid credentials");
     }
   };
 
   const handleSignup = async () => {
     setError("");
-    if (!username.trim() || !password.trim() || !displayName.trim()) {
+    if (!username.trim() || !password.trim() || !displayName.trim() || !payrollId.trim()) {
       setError("All fields are required");
       return;
     }
@@ -43,12 +44,13 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
       return;
     }
     try {
-      const user = await api.register(username.trim(), password, displayName.trim());
+      const user = await api.register(username.trim(), password, displayName.trim(), payrollId.trim());
       if (user) {
         await api.login(username.trim(), password);
         setUsername("");
         setPassword("");
         setDisplayName("");
+        setPayrollId("");
         onAuth();
       } else {
         setError("Registration failed");
@@ -78,28 +80,43 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
 
         <div className="space-y-4">
           {mode === "signup" && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Display Name</label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
-                placeholder="e.g., Joseph Kiprop"
-              />
-            </div>
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Display Name</label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+                  placeholder="e.g., Joseph Kiprop"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Payroll ID</label>
+                <input
+                  type="text"
+                  value={payrollId}
+                  onChange={(e) => setPayrollId(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+                  placeholder="e.g., SL-00123"
+                />
+              </div>
+            </>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Username</label>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+              {mode === "login" ? "Username or Payroll ID" : "Username"}
+            </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
-              placeholder="e.g., jkiprop"
+              placeholder={mode === "login" ? "Username or Payroll ID" : "e.g., jkiprop"}
             />
           </div>
 
@@ -111,7 +128,7 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
-              placeholder={mode === "login" ? "••••" : "At least 4 characters"}
+              placeholder={mode === "login" ? "Password or Payroll ID" : "At least 4 characters"}
             />
           </div>
 
@@ -133,7 +150,7 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
           </p>
 
           {mode === "login" && (
-            <p className="text-center text-[11px] text-slate-400">Default admin: admin / 1234</p>
+            <p className="text-center text-[11px] text-slate-400">You can log in with your password or payroll ID</p>
           )}
         </div>
       </div>
