@@ -1,6 +1,29 @@
 import { serve } from "bun";
 import index from "./index.html";
 import db, { getSessionUser, createSession, setSessionCookie, clearSessionCookie, addAuditLog } from "./db";
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
+import { join, extname } from "path";
+
+const UPLOADS_DIR = join(import.meta.dir, "..", "data", "uploads");
+if (!existsSync(UPLOADS_DIR)) {
+  mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
+
+async function fireWebhook(webhookUrl: string, payload: any) {
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (e) {
+    console.error(`Webhook POST failed to ${webhookUrl}:`, (e as Error).message);
+  }
+}
 
 // Rate limiter
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
@@ -103,6 +126,12 @@ const server = serve({
         db.query(
           "INSERT INTO users (id, username, password, display_name, payroll_id, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
         ).run(id, username, password, displayName, payrollId, "user", now);
+
+        // Auto-assign to "general" department
+        const generalDept = db.query("SELECT id FROM departments WHERE slug = 'general'").get() as any;
+        if (generalDept) {
+          db.run("INSERT OR IGNORE INTO user_departments (user_id, department_id) VALUES (?, ?)", [id, generalDept.id]);
+        }
 
         const token = createSession(id);
         const res = json({ user: { id, username, displayName, email: null, payrollId, role: "user", theme: "safari" } });
@@ -214,6 +243,111 @@ const server = serve({
         db.query("DELETE FROM users WHERE id = ?").run(id);
         addAuditLog(null, user.id, "user_delete", `Deleted user ${id}`);
         return json({ ok: true });
+      },
+    },
+
+    // ─── User Departments ─────────────────────────────────────
+
+    "/api/users/:id/departments": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const depts = db.query(
+          `SELECT d.* FROM departments d JOIN user_departments ud ON d.id = ud.department_id WHERE ud.user_id = ? ORDER BY d.sort_order`
+        ).all(id);
+        return json(depts.map((d: any) => ({
+          id: d.id, name: d.name, slug: d.slug, color: d.color, icon: d.icon, sortOrder: d.sort_order, createdAt: d.created_at,
+        })));
+      },
+
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const { departmentId } = await readBody(req);
+        if (!departmentId) return json({ error: "departmentId required" }, 400);
+        const target = db.query("SELECT id FROM users WHERE id = ?").get(id);
+        if (!target) return notFound();
+        const dept = db.query("SELECT id FROM departments WHERE id = ?").get(departmentId);
+        if (!dept) return json({ error: "Department not found" }, 404);
+        db.run("INSERT OR IGNORE INTO user_departments (user_id, department_id) VALUES (?, ?)", [id, departmentId]);
+        return json({ ok: true });
+      },
+    },
+
+    "/api/users/:id/departments/:deptId": {
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id, deptId } = req.params;
+        db.run("DELETE FROM user_departments WHERE user_id = ? AND department_id = ?", [id, deptId]);
+        return json({ ok: true });
+      },
+    },
+
+    // ─── Current User Departments ─────────────────────────────
+
+    "/api/user/departments": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const depts = db.query(
+          `SELECT d.* FROM departments d JOIN user_departments ud ON d.id = ud.department_id WHERE ud.user_id = ? ORDER BY d.sort_order`
+        ).all(user.id);
+        return json(depts.map((d: any) => ({
+          id: d.id, name: d.name, slug: d.slug, color: d.color, icon: d.icon, sortOrder: d.sort_order, createdAt: d.created_at,
+        })));
+      },
+
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { departmentId } = await readBody(req);
+        if (!departmentId) return json({ error: "departmentId required" }, 400);
+        const dept = db.query("SELECT id FROM departments WHERE id = ?").get(departmentId);
+        if (!dept) return json({ error: "Department not found" }, 404);
+        db.run("INSERT OR IGNORE INTO user_departments (user_id, department_id) VALUES (?, ?)", [user.id, departmentId]);
+        return json({ ok: true });
+      },
+    },
+
+    "/api/user/departments/:deptId": {
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { deptId } = req.params;
+        db.run("DELETE FROM user_departments WHERE user_id = ? AND department_id = ?", [user.id, deptId]);
+        return json({ ok: true });
+      },
+    },
+
+    // ─── File Upload ──────────────────────────────────────────
+
+    "/api/upload": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const contentType = req.headers.get("content-type") || "";
+        if (!contentType.includes("multipart/form-data")) {
+          return json({ error: "Expected multipart/form-data" }, 400);
+        }
+        const formData = await req.formData();
+        const file = formData.get("file");
+        if (!file || typeof file === "string") {
+          return json({ error: "No file provided" }, 400);
+        }
+        if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+          return json({ error: "Only JPG, PNG, GIF, WebP images allowed" }, 400);
+        }
+        if (file.size > MAX_UPLOAD_SIZE) {
+          return json({ error: "File too large (max 5MB)" }, 400);
+        }
+        const ext = extname(file.name) || ".jpg";
+        const filename = `${crypto.randomUUID()}${ext}`;
+        const buffer = Buffer.from(await file.arrayBuffer());
+        writeFileSync(join(UPLOADS_DIR, filename), buffer);
+        return json({ url: `/uploads/${filename}` });
       },
     },
 
@@ -813,9 +947,37 @@ const server = serve({
         const dept = db.query("SELECT * FROM departments WHERE id = ?").get(id) as any;
         if (!dept) return notFound();
         db.query("UPDATE documents SET department_id = NULL WHERE department_id = ?").run(id);
-        db.query("UPDATE announcements SET department_id = NULL WHERE department_id = ?").run(id);
+        db.query("DELETE FROM announcement_departments WHERE department_id = ?").run(id);
+        db.query("DELETE FROM user_departments WHERE department_id = ?").run(id);
+        db.query("DELETE FROM department_webhooks WHERE department_id = ?").run(id);
         db.query("DELETE FROM departments WHERE id = ?").run(id);
         addAuditLog(null, user.id, "department_delete", `Deleted department "${dept.name}"`);
+        return json({ ok: true });
+      },
+    },
+
+    // ─── Department Webhooks ──────────────────────────────────
+
+    "/api/departments/:id/webhook": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        const row = db.query("SELECT webhook_url FROM department_webhooks WHERE department_id = ?").get(id) as any;
+        return json({ webhookUrl: row?.webhook_url || null });
+      },
+
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const { webhookUrl } = await readBody(req);
+        const existing = db.query("SELECT department_id FROM department_webhooks WHERE department_id = ?").get(id);
+        if (existing) {
+          db.query("UPDATE department_webhooks SET webhook_url = ? WHERE department_id = ?").run(webhookUrl || null, id);
+        } else if (webhookUrl) {
+          db.query("INSERT INTO department_webhooks (department_id, webhook_url) VALUES (?, ?)").run(id, webhookUrl);
+        }
         return json({ ok: true });
       },
     },
@@ -827,53 +989,106 @@ const server = serve({
         const user = getSessionUser(req);
         if (!user) return unauthorized();
         const now = new Date().toISOString();
+
+        // Get user's department IDs
+        const userDeptRows = db.query("SELECT department_id FROM user_departments WHERE user_id = ?").all(user.id) as any[];
+        const userDeptIds = userDeptRows.map((r) => r.department_id);
+
+        // Fetch all non-expired announcements
         const rows = db.query(
-          `SELECT a.*, d.name as department_name, d.color as department_color, u.display_name as author_name
+          `SELECT a.*, u.display_name as author_name
            FROM announcements a
-           LEFT JOIN departments d ON a.department_id = d.id
            LEFT JOIN users u ON a.created_by = u.id
            WHERE (a.expires_at IS NULL OR a.expires_at > ?)
            ORDER BY a.is_pinned DESC, a.sort_order ASC, a.priority DESC, a.created_at DESC`
-        ).all(now);
-        return json(rows.map((r: any) => ({
-          id: r.id,
-          title: r.title,
-          content: r.content,
-          type: r.type,
-          departmentId: r.department_id,
-          departmentName: r.department_name,
-          departmentColor: r.department_color,
-          priority: r.priority,
-          isPinned: !!r.is_pinned,
-          imageUrl: r.image_url,
-          emoji: r.emoji,
-          gridSize: r.grid_size || 'medium',
-          sortOrder: r.sort_order,
-          expiresAt: r.expires_at,
-          createdBy: r.created_by,
-          authorName: r.author_name,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        })));
+        ).all(now) as any[];
+
+        // Filter by department membership (admins see all)
+        const filtered = user.role === "admin" ? rows : rows.filter((r: any) => {
+          const annDeptRows = db.query("SELECT department_id FROM announcement_departments WHERE announcement_id = ?").all(r.id) as any[];
+          // If no departments targeted → visible to all
+          if (annDeptRows.length === 0) return true;
+          // Otherwise, visible if user has at least one matching department
+          return annDeptRows.some((ad: any) => userDeptIds.includes(ad.department_id));
+        });
+
+        return json(filtered.map((r: any) => {
+          const annDeptRows = db.query(
+            `SELECT d.id, d.name, d.color FROM departments d JOIN announcement_departments ad ON d.id = ad.department_id WHERE ad.announcement_id = ?`
+          ).all(r.id) as any[];
+          return {
+            id: r.id,
+            title: r.title,
+            content: r.content,
+            type: r.type,
+            departmentIds: annDeptRows.map((d: any) => d.id),
+            departmentNames: annDeptRows.map((d: any) => d.name),
+            departmentColors: annDeptRows.map((d: any) => d.color),
+            priority: r.priority,
+            isPinned: !!r.is_pinned,
+            imageUrl: r.image_url,
+            emoji: r.emoji,
+            gridSize: r.grid_size || 'medium',
+            sendToWebhook: !!r.send_to_webhook,
+            sortOrder: r.sort_order,
+            expiresAt: r.expires_at,
+            createdBy: r.created_by,
+            authorName: r.author_name,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+          };
+        }));
       },
 
       async POST(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
-        const { title, content, type, departmentId, priority, isPinned, imageUrl, emoji, gridSize, expiresAt } = await readBody(req);
+        const { title, content, type, departmentIds, priority, isPinned, imageUrl, emoji, gridSize, sendToWebhook, expiresAt } = await readBody(req);
         if (!title || !title.trim()) return json({ error: "Title required" }, 400);
         const id = `ann-${crypto.randomUUID()}`;
         const now = new Date().toISOString();
         const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM announcements").get() as any).m ?? -1;
         db.query(
-          `INSERT INTO announcements (id, title, content, type, department_id, priority, is_pinned, image_url, emoji, grid_size, sort_order, expires_at, created_by, created_at, updated_at)
+          `INSERT INTO announcements (id, title, content, type, priority, is_pinned, image_url, emoji, grid_size, send_to_webhook, sort_order, expires_at, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
           id, title.trim(), content || "", type || "info",
-          departmentId || null, priority ?? 0, isPinned ? 1 : 0,
-          imageUrl || null, emoji || null, gridSize || "medium", maxOrder + 1,
+          priority ?? 0, isPinned ? 1 : 0,
+          imageUrl || null, emoji || null, gridSize || "medium", sendToWebhook ? 1 : 0, maxOrder + 1,
           expiresAt || null, user.id, now, now
         );
+
+        // Insert department associations
+        if (Array.isArray(departmentIds) && departmentIds.length > 0) {
+          for (const deptId of departmentIds) {
+            db.run("INSERT OR IGNORE INTO announcement_departments (announcement_id, department_id) VALUES (?, ?)", [id, deptId]);
+          }
+        }
+
+        // Fire webhooks if enabled
+        if (sendToWebhook) {
+          const targetDepts = Array.isArray(departmentIds) && departmentIds.length > 0
+            ? departmentIds
+            : [];
+          const webhookDepts = targetDepts.length > 0
+            ? db.query(`SELECT d.id, d.name, dw.webhook_url FROM departments d JOIN department_webhooks dw ON d.id = dw.department_id WHERE d.id IN (${targetDepts.map(() => "?").join(",")}) AND dw.webhook_url IS NOT NULL`).all(...targetDepts) as any[]
+            : db.query(`SELECT d.id, d.name, dw.webhook_url FROM departments d JOIN department_webhooks dw ON d.id = dw.department_id WHERE dw.webhook_url IS NOT NULL`).all() as any[];
+
+          for (const dept of webhookDepts) {
+            fireWebhook(dept.webhook_url, {
+              type: "announcement",
+              title: title.trim(),
+              content: content || "",
+              image_url: imageUrl || null,
+              emoji: emoji || null,
+              departments: [{ id: dept.id, name: dept.name }],
+              priority: ["normal", "high", "urgent"][priority ?? 0] || "normal",
+              author: user.display_name,
+              created_at: now,
+            });
+          }
+        }
+
         addAuditLog(null, user.id, "announcement_create", `Created announcement "${title.trim()}"`);
         return json({ id }, 201);
       },
@@ -889,20 +1104,31 @@ const server = serve({
         const body = await readBody(req);
         const now = new Date().toISOString();
         db.query(
-          `UPDATE announcements SET title = ?, content = ?, type = ?, department_id = ?, priority = ?, is_pinned = ?, image_url = ?, emoji = ?, grid_size = ?, expires_at = ?, updated_at = ? WHERE id = ?`
+          `UPDATE announcements SET title = ?, content = ?, type = ?, priority = ?, is_pinned = ?, image_url = ?, emoji = ?, grid_size = ?, send_to_webhook = ?, expires_at = ?, updated_at = ? WHERE id = ?`
         ).run(
           body.title ?? ann.title,
           body.content !== undefined ? body.content : ann.content,
           body.type ?? ann.type,
-          body.departmentId !== undefined ? (body.departmentId || null) : ann.department_id,
           body.priority ?? ann.priority,
           body.isPinned !== undefined ? (body.isPinned ? 1 : 0) : ann.is_pinned,
           body.imageUrl !== undefined ? (body.imageUrl || null) : ann.image_url,
           body.emoji !== undefined ? (body.emoji || null) : ann.emoji,
           body.gridSize ?? ann.grid_size,
+          body.sendToWebhook !== undefined ? (body.sendToWebhook ? 1 : 0) : ann.send_to_webhook,
           body.expiresAt !== undefined ? (body.expiresAt || null) : ann.expires_at,
           now, id
         );
+
+        // Update department associations if provided
+        if (body.departmentIds !== undefined) {
+          db.query("DELETE FROM announcement_departments WHERE announcement_id = ?").run(id);
+          if (Array.isArray(body.departmentIds)) {
+            for (const deptId of body.departmentIds) {
+              db.run("INSERT OR IGNORE INTO announcement_departments (announcement_id, department_id) VALUES (?, ?)", [id, deptId]);
+            }
+          }
+        }
+
         addAuditLog(null, user.id, "announcement_update", `Updated announcement "${body.title ?? ann.title}"`);
         return json({ ok: true });
       },
@@ -938,8 +1164,20 @@ const server = serve({
       async GET(req) {
         const user = getSessionUser(req);
         if (!user) return unauthorized();
-        const rows = db.query("SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order").all();
-        return json(rows.map((r: any) => ({
+
+        // Get user's department IDs
+        const userDeptRows = db.query("SELECT department_id FROM user_departments WHERE user_id = ?").all(user.id) as any[];
+        const userDeptIds = userDeptRows.map((r) => r.department_id);
+
+        const rows = db.query("SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order").all() as any[];
+
+        // Filter banners by department (if banner has a department association)
+        const filtered = rows.filter((r: any) => {
+          // For now, banners are not department-scoped (show to all)
+          return true;
+        });
+
+        return json(filtered.map((r: any) => ({
           id: r.id,
           title: r.title,
           subtitle: r.subtitle,
@@ -950,6 +1188,7 @@ const server = serve({
           linkUrl: r.link_url,
           sortOrder: r.sort_order,
           isActive: !!r.is_active,
+          sendToWebhook: !!r.send_to_webhook,
           createdAt: r.created_at,
         })));
       },
@@ -957,14 +1196,33 @@ const server = serve({
       async POST(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
-        const { title, subtitle, bgColor, textColor, gradient, imageUrl, linkUrl } = await readBody(req);
+        const { title, subtitle, bgColor, textColor, gradient, imageUrl, linkUrl, sendToWebhook } = await readBody(req);
         if (!title || !title.trim()) return json({ error: "Title required" }, 400);
         const id = `banner-${crypto.randomUUID()}`;
         const now = new Date().toISOString();
         const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM banners").get() as any).m ?? -1;
         db.query(
-          `INSERT INTO banners (id, title, subtitle, bg_color, text_color, gradient, image_url, link_url, sort_order, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
-        ).run(id, title.trim(), subtitle || "", bgColor || "#5C3A1E", textColor || "#FFFFFF", gradient || null, imageUrl || null, linkUrl || null, maxOrder + 1, now);
+          `INSERT INTO banners (id, title, subtitle, bg_color, text_color, gradient, image_url, link_url, sort_order, is_active, send_to_webhook, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+        ).run(id, title.trim(), subtitle || "", bgColor || "#5C3A1E", textColor || "#FFFFFF", gradient || null, imageUrl || null, linkUrl || null, maxOrder + 1, sendToWebhook ? 1 : 0, now);
+
+        // Fire webhooks if enabled
+        if (sendToWebhook) {
+          const webhookDepts = db.query(
+            `SELECT d.id, d.name, dw.webhook_url FROM departments d JOIN department_webhooks dw ON d.id = dw.department_id WHERE dw.webhook_url IS NOT NULL`
+          ).all() as any[];
+          for (const dept of webhookDepts) {
+            fireWebhook(dept.webhook_url, {
+              type: "banner",
+              title: title.trim(),
+              content: subtitle || "",
+              image_url: imageUrl || null,
+              departments: [{ id: dept.id, name: dept.name }],
+              author: user.display_name,
+              created_at: now,
+            });
+          }
+        }
+
         addAuditLog(null, user.id, "banner_create", `Created banner "${title.trim()}"`);
         return json({ id }, 201);
       },
@@ -1042,6 +1300,37 @@ const server = serve({
           };
         });
         return json(result);
+      },
+    },
+
+    // ─── Static Uploads ───────────────────────────────────────
+
+    "/uploads/:filename": {
+      async GET(req) {
+        const { filename } = req.params;
+        // Prevent path traversal
+        if (filename.includes("..") || filename.includes("/")) {
+          return notFound();
+        }
+        const filePath = join(UPLOADS_DIR, filename);
+        if (!existsSync(filePath)) {
+          return notFound();
+        }
+        const data = readFileSync(filePath);
+        const ext = extname(filename).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".png": "image/png",
+          ".gif": "image/gif",
+          ".webp": "image/webp",
+        };
+        return new Response(data, {
+          headers: {
+            "Content-Type": mimeTypes[ext] || "application/octet-stream",
+            "Cache-Control": "public, max-age=86400",
+          },
+        });
       },
     },
   },

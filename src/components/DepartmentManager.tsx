@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Building2,
   Plus,
@@ -7,6 +7,8 @@ import {
   X,
   GripVertical,
   Palette,
+  Send,
+  Globe,
 } from "lucide-react";
 import type { Department } from "@/types";
 import * as api from "@/api";
@@ -146,8 +148,17 @@ function DepartmentEditorModal({
 }) {
   const [name, setName] = useState(department?.name ?? "");
   const [color, setColor] = useState(department?.color ?? DEPT_COLORS[0]);
+  const [webhookUrl, setWebhookUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (department) {
+      api.getDepartmentWebhook(department.id).then((data) => {
+        setWebhookUrl(data?.webhookUrl || "");
+      });
+    }
+  }, [department?.id]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -164,12 +175,18 @@ function DepartmentEditorModal({
         setSaving(false);
         return;
       }
+      // Save webhook URL
+      await api.setDepartmentWebhook(department.id, webhookUrl);
     } else {
       const result = await api.createDepartment(name.trim(), color);
       if (!result) {
         setError("Department already exists");
         setSaving(false);
         return;
+      }
+      // Save webhook URL for new department
+      if (webhookUrl) {
+        await api.setDepartmentWebhook(result.id, webhookUrl);
       }
     }
     setSaving(false);
@@ -234,6 +251,21 @@ function DepartmentEditorModal({
                 className="flex-1 px-3 py-1.5 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-xs font-mono"
               />
             </div>
+          </div>
+
+          {/* Webhook URL */}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+              <Send className="w-3 h-3" /> Webhook URL (for WhatsApp via n8n)
+            </label>
+            <input
+              type="url"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+              placeholder="https://your-n8n-instance.com/webhook/..."
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Set this to receive announcement pushes via n8n to WhatsApp (Twilio)</p>
           </div>
         </div>
 

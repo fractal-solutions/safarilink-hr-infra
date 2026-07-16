@@ -102,6 +102,75 @@ export async function deleteUser(userId: string): Promise<boolean> {
   return res !== null;
 }
 
+// User Departments
+export async function getUserDepartments(userId: string): Promise<Department[]> {
+  return (await request<Department[]>(`/users/${userId}/departments`)) ?? [];
+}
+
+export async function addUserDepartment(userId: string, departmentId: string): Promise<boolean> {
+  const res = await request(`/users/${userId}/departments`, {
+    method: "POST",
+    body: JSON.stringify({ departmentId }),
+  });
+  return res !== null;
+}
+
+export async function removeUserDepartment(userId: string, departmentId: string): Promise<boolean> {
+  const res = await request(`/users/${userId}/departments/${departmentId}`, { method: "DELETE" });
+  return res !== null;
+}
+
+// Current user's departments
+export async function getMyDepartments(): Promise<Department[]> {
+  return (await request<Department[]>("/user/departments")) ?? [];
+}
+
+export async function addMyDepartment(departmentId: string): Promise<boolean> {
+  const res = await request("/user/departments", {
+    method: "POST",
+    body: JSON.stringify({ departmentId }),
+  });
+  return res !== null;
+}
+
+export async function removeMyDepartment(departmentId: string): Promise<boolean> {
+  const res = await request(`/user/departments/${departmentId}`, { method: "DELETE" });
+  return res !== null;
+}
+
+// Department Webhooks
+export async function getDepartmentWebhook(departmentId: string): Promise<{ webhookUrl: string | null }> {
+  return (await request<{ webhookUrl: string | null }>(`/departments/${departmentId}/webhook`)) ?? { webhookUrl: null };
+}
+
+export async function setDepartmentWebhook(departmentId: string, webhookUrl: string): Promise<boolean> {
+  const res = await request(`/departments/${departmentId}/webhook`, {
+    method: "PUT",
+    body: JSON.stringify({ webhookUrl }),
+  });
+  return res !== null;
+}
+
+// File Upload
+export async function uploadFile(file: File): Promise<{ url: string } | null> {
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await fetch(`${API_BASE}/upload`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || `Upload failed: ${res.status}`);
+    }
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 // Documents
 export async function getDocuments(archived?: boolean): Promise<PolicyDocument[]> {
   const q = qs({ archived });
@@ -326,12 +395,13 @@ export async function createAnnouncement(data: {
   title: string;
   content?: string;
   type?: string;
-  departmentId?: string | null;
+  departmentIds?: string[];
   priority?: number;
   isPinned?: boolean;
   imageUrl?: string | null;
   emoji?: string | null;
   gridSize?: string;
+  sendToWebhook?: boolean;
   expiresAt?: string | null;
 }): Promise<string | null> {
   const res = await request<{ id: string }>("/announcements", {
@@ -375,6 +445,7 @@ export async function createBanner(data: {
   gradient?: string;
   imageUrl?: string;
   linkUrl?: string;
+  sendToWebhook?: boolean;
 }): Promise<string | null> {
   const res = await request<{ id: string }>("/banners", {
     method: "POST",

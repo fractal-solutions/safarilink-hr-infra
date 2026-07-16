@@ -18,6 +18,9 @@ import {
   Smile,
   Grid2x2,
   Sparkles,
+  Send,
+  Upload,
+  LinkIcon,
 } from "lucide-react";
 import type { Announcement, Banner, Department, PolicyDocument } from "@/types";
 import * as api from "@/api";
@@ -41,9 +44,15 @@ const TYPE_CONFIG: Record<string, { icon: typeof Info; color: string; bg: string
 const GRID_SIZE_CLASSES: Record<string, string> = {
   small: "",
   medium: "",
-  large: "sm:col-span-2 sm:row-span-2",
   wide: "sm:col-span-2",
   tall: "sm:row-span-2",
+  large: "sm:col-span-2 sm:row-span-2",
+  xlarge: "sm:col-span-3 sm:row-span-2",
+  "tall-3": "sm:row-span-3",
+  "tall-4": "sm:row-span-4",
+  hero: "sm:col-span-3",
+  "hero-3": "sm:col-span-3 sm:row-span-3",
+  "hero-4": "sm:col-span-3 sm:row-span-4",
 };
 
 const PRESET_GRADIENTS = [
@@ -71,6 +80,7 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
   const [showBannerEditor, setShowBannerEditor] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
@@ -104,16 +114,13 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
     setDragId(null);
     setDropId(null);
     dragCounter.current = [];
-
     const items = [...announcements];
     const fromIdx = items.findIndex((a) => a.id === dragId);
     const toIdx = items.findIndex((a) => a.id === targetId);
     if (fromIdx === -1 || toIdx === -1) return;
-
     const [moved] = items.splice(fromIdx, 1);
     items.splice(toIdx, 0, moved);
     setAnnouncements(items);
-
     const order = items.map((a, i) => ({ id: a.id, sort_order: i }));
     await api.reorderAnnouncements(order);
   }, [dragId, announcements]);
@@ -219,9 +226,12 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
             <Pin className="w-4 h-4 text-sf-gold" />
             <h3 className="text-sm font-bold text-sf-brown dark:text-slate-200 uppercase tracking-wider">Pinned</h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 auto-rows-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 auto-rows-[200px]">
             {pinned.map((ann) => (
-              <BentoCard key={ann.id} announcement={ann} isAdmin={isAdmin} onEdit={() => { setEditingAnnouncement(ann); setShowAnnouncementEditor(true); }} onDelete={() => handleDeleteAnnouncement(ann.id)} deleting={deletingId === ann.id} onCancelDelete={() => setDeletingId(null)}
+              <BentoCard key={ann.id} announcement={ann} isAdmin={isAdmin}
+                onClick={() => setSelectedAnnouncement(ann)}
+                onEdit={() => { setEditingAnnouncement(ann); setShowAnnouncementEditor(true); }}
+                onDelete={() => handleDeleteAnnouncement(ann.id)} deleting={deletingId === ann.id} onCancelDelete={() => setDeletingId(null)}
                 isDragging={dragId === ann.id} isDropTarget={dropId === ann.id}
                 onDragStart={() => handleDragStart(ann.id)} onDragEnd={handleDragEnd} onDragOver={handleDragOver}
                 onDragEnter={(e) => handleDragEnter(ann.id, e)} onDragLeave={() => handleDragLeave(ann.id)} onDrop={() => handleDrop(ann.id)} />
@@ -230,16 +240,19 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
         </div>
       )}
 
-      {/* All announcements — bento grid */}
+      {/* All announcements */}
       {regular.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <Bell className="w-4 h-4 text-blue-500" />
             <h3 className="text-sm font-bold text-sf-brown dark:text-slate-200 uppercase tracking-wider">Announcements</h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 auto-rows-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 auto-rows-[200px]">
             {regular.map((ann) => (
-              <BentoCard key={ann.id} announcement={ann} isAdmin={isAdmin} onEdit={() => { setEditingAnnouncement(ann); setShowAnnouncementEditor(true); }} onDelete={() => handleDeleteAnnouncement(ann.id)} deleting={deletingId === ann.id} onCancelDelete={() => setDeletingId(null)}
+              <BentoCard key={ann.id} announcement={ann} isAdmin={isAdmin}
+                onClick={() => setSelectedAnnouncement(ann)}
+                onEdit={() => { setEditingAnnouncement(ann); setShowAnnouncementEditor(true); }}
+                onDelete={() => handleDeleteAnnouncement(ann.id)} deleting={deletingId === ann.id} onCancelDelete={() => setDeletingId(null)}
                 isDragging={dragId === ann.id} isDropTarget={dropId === ann.id}
                 onDragStart={() => handleDragStart(ann.id)} onDragEnd={handleDragEnd} onDragOver={handleDragOver}
                 onDragEnter={(e) => handleDragEnter(ann.id, e)} onDragLeave={() => handleDragLeave(ann.id)} onDrop={() => handleDrop(ann.id)} />
@@ -283,18 +296,118 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
         </div>
       )}
 
+      {selectedAnnouncement && (
+        <AnnouncementDetailModal
+          announcement={selectedAnnouncement}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedAnnouncement(null)}
+          onEdit={() => { setSelectedAnnouncement(null); setEditingAnnouncement(selectedAnnouncement); setShowAnnouncementEditor(true); }}
+        />
+      )}
       {showAnnouncementEditor && (
         <AnnouncementEditorModal announcement={editingAnnouncement} departments={departments} onClose={() => { setShowAnnouncementEditor(false); setEditingAnnouncement(null); }} onSave={async () => { setShowAnnouncementEditor(false); setEditingAnnouncement(null); await loadData(); }} />
       )}
       {showBannerEditor && (
-        <BannerEditorModal banner={editingBanner} onClose={() => { setShowBannerEditor(false); setEditingBanner(null); }} onSave={async () => { setShowBannerEditor(false); setEditingBanner(null); await loadData(); }} />
+        <BannerEditorModal banner={editingBanner} departments={departments} onClose={() => { setShowBannerEditor(false); setEditingBanner(null); }} onSave={async () => { setShowBannerEditor(false); setEditingBanner(null); await loadData(); }} />
       )}
     </div>
   );
 }
 
-function BentoCard({ announcement: ann, isAdmin, onEdit, onDelete, deleting, onCancelDelete, isDragging, isDropTarget, onDragStart, onDragEnd, onDragOver, onDragEnter, onDragLeave, onDrop }: {
-  announcement: Announcement; isAdmin: boolean; onEdit: () => void; onDelete: () => void; deleting: boolean; onCancelDelete: () => void;
+// ─── Announcement Detail Modal ──────────────────────────────────
+
+function AnnouncementDetailModal({ announcement: ann, isAdmin, onClose, onEdit }: {
+  announcement: Announcement; isAdmin: boolean; onClose: () => void; onEdit: () => void;
+}) {
+  const config = TYPE_CONFIG[ann.type] || TYPE_CONFIG.info;
+  const Icon = config.icon;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-xs" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-slate-800 w-full sm:max-w-2xl sm:rounded-2xl shadow-2xl max-h-[100dvh] sm:max-h-[90vh] flex flex-col rounded-t-2xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-sf-cream-dark dark:border-slate-700 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={cn("p-1.5 rounded-lg", config.bg)}>
+              <Icon className={cn("w-4 h-4", config.color)} />
+            </div>
+            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", config.bg, config.color)}>{config.label}</span>
+            {ann.isPinned && <Pin className="w-3 h-3 text-sf-gold shrink-0" />}
+          </div>
+          <div className="flex items-center gap-1">
+            {isAdmin && (
+              <button onClick={onEdit} className="p-2 rounded-lg text-slate-400 hover:text-sf-brown hover:bg-sf-cream dark:hover:bg-slate-700 transition-colors">
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-sf-cream dark:hover:bg-slate-700 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Image */}
+          {ann.imageUrl && (
+            <div className="w-full">
+              <img src={ann.imageUrl} alt={ann.title} className="w-full max-h-[50vh] object-contain bg-black/5" />
+            </div>
+          )}
+
+          <div className="p-5 sm:p-6 space-y-4">
+            {/* Title + emoji */}
+            <div className="flex items-start gap-3">
+              {ann.emoji && !ann.imageUrl && (
+                <span className="text-3xl shrink-0 leading-none mt-0.5">{ann.emoji}</span>
+              )}
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">{ann.title}</h2>
+            </div>
+
+            {/* Content */}
+            {ann.content && (
+              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm sm:text-base whitespace-pre-wrap">{ann.content}</p>
+            )}
+
+            {/* Metadata */}
+            <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap pt-2 border-t border-sf-cream-dark dark:border-slate-700">
+              {ann.departmentNames.length > 0 && (
+                <span className="flex items-center gap-1.5 flex-wrap">
+                  {ann.departmentNames.map((name, i) => (
+                    <span key={i} className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ann.departmentColors[i] || "#999" }} />
+                      {name}
+                    </span>
+                  ))}
+                </span>
+              )}
+              {ann.departmentNames.length === 0 && (
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" />All Departments</span>
+              )}
+              {ann.authorName && <span>By {ann.authorName}</span>}
+              <span>{new Date(ann.createdAt).toLocaleDateString()}</span>
+              {ann.expiresAt && <span className="text-amber-500">Expires {new Date(ann.expiresAt).toLocaleDateString()}</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Bento Card ─────────────────────────────────────────────────
+
+function BentoCard({ announcement: ann, isAdmin, onClick, onEdit, onDelete, deleting, onCancelDelete, isDragging, isDropTarget, onDragStart, onDragEnd, onDragOver, onDragEnter, onDragLeave, onDrop }: {
+  announcement: Announcement; isAdmin: boolean; onClick: () => void; onEdit: () => void; onDelete: () => void; deleting: boolean; onCancelDelete: () => void;
   isDragging?: boolean; isDropTarget?: boolean;
   onDragStart?: () => void; onDragEnd?: () => void; onDragOver?: (e: React.DragEvent) => void;
   onDragEnter?: (e: React.DragEvent) => void; onDragLeave?: () => void; onDrop?: () => void;
@@ -302,8 +415,14 @@ function BentoCard({ announcement: ann, isAdmin, onEdit, onDelete, deleting, onC
   const config = TYPE_CONFIG[ann.type] || TYPE_CONFIG.info;
   const Icon = config.icon;
   const gridSize = ann.gridSize || "medium";
-  const isLarge = gridSize === "large" || gridSize === "tall";
+  const isMultiRow = gridSize.includes("tall") || gridSize === "large" || gridSize === "xlarge" || gridSize === "hero-3" || gridSize === "hero-4";
+  const isTall3 = gridSize === "tall-3" || gridSize === "hero-3";
+  const isTall4 = gridSize === "tall-4" || gridSize === "hero-4";
+  const isHero = gridSize === "hero" || gridSize === "hero-3" || gridSize === "hero-4";
   const hasImage = !!ann.imageUrl;
+
+  // Image height based on row span
+  const imageHeightClass = isTall4 ? "h-56" : isTall3 ? "h-44" : isHero ? "h-36" : isMultiRow ? "h-32" : "h-24";
 
   return (
     <div
@@ -314,11 +433,12 @@ function BentoCard({ announcement: ann, isAdmin, onEdit, onDelete, deleting, onC
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={cn("rounded-xl border overflow-hidden transition-all relative group flex flex-col", config.border, GRID_SIZE_CLASSES[gridSize], isDragging && "opacity-40 scale-95", isDropTarget && "ring-2 ring-sf-gold/50 border-sf-gold border-dashed bg-sf-cream/30")}
+      onClick={onClick}
+      className={cn("rounded-xl border overflow-hidden transition-all relative group flex flex-col cursor-pointer hover:shadow-md hover:border-sf-gold/30", config.border, GRID_SIZE_CLASSES[gridSize], isDragging && "opacity-40 scale-95", isDropTarget && "ring-2 ring-sf-gold/50 border-sf-gold border-dashed bg-sf-cream/30")}
     >
       {/* Image */}
       {hasImage && (
-        <div className={cn("w-full overflow-hidden", isLarge ? "h-48" : "h-28")}>
+        <div className={cn("w-full overflow-hidden", imageHeightClass)}>
           <img src={ann.imageUrl!} alt={ann.title} className="w-full h-full object-cover" />
         </div>
       )}
@@ -335,16 +455,19 @@ function BentoCard({ announcement: ann, isAdmin, onEdit, onDelete, deleting, onC
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <h4 className={cn("font-bold text-slate-900 dark:text-slate-100", isLarge ? "text-lg" : "text-sm")}>{ann.title}</h4>
+              <h4 className={cn("font-bold text-slate-900 dark:text-slate-100", isMultiRow || isHero ? "text-lg" : "text-sm")}>{ann.title}</h4>
               {ann.isPinned && <Pin className="w-3 h-3 text-sf-gold shrink-0" />}
               <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", config.bg, config.color)}>{config.label}</span>
             </div>
             {ann.content && (
-              <p className={cn("text-slate-600 dark:text-slate-400 leading-relaxed", isLarge ? "text-sm" : "text-xs", isLarge ? "" : "line-clamp-3")}>{ann.content}</p>
+              <p className={cn("text-slate-600 dark:text-slate-400 leading-relaxed", isMultiRow || isHero ? "text-sm" : "text-xs", isMultiRow || isHero ? "" : "line-clamp-3")}>{ann.content}</p>
             )}
             <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-400 flex-wrap">
-              {ann.departmentName && (
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: ann.departmentColor || "#999" }} />{ann.departmentName}</span>
+              {ann.departmentNames.length > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ann.departmentColors[0] || "#999" }} />
+                  {ann.departmentNames.length === 1 ? ann.departmentNames[0] : `${ann.departmentNames.length} depts`}
+                </span>
               )}
               {ann.authorName && <span>By {ann.authorName}</span>}
               <span>{new Date(ann.createdAt).toLocaleDateString()}</span>
@@ -353,8 +476,8 @@ function BentoCard({ announcement: ann, isAdmin, onEdit, onDelete, deleting, onC
           </div>
           {isAdmin && (
             <div className="flex items-center gap-1 shrink-0 hidden group-hover:flex">
-              <button onClick={onEdit} className="p-1.5 rounded-md text-slate-400 hover:text-sf-brown hover:bg-white/50 dark:hover:bg-slate-700 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-              <button onClick={onDelete} className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+              <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 rounded-md text-slate-400 hover:text-sf-brown hover:bg-white/50 dark:hover:bg-slate-700 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+              <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           )}
         </div>
@@ -375,28 +498,89 @@ function BentoCard({ announcement: ann, isAdmin, onEdit, onDelete, deleting, onC
   );
 }
 
+// ─── Image Upload Component ─────────────────────────────────────
+
+function ImageUploadInput({ value, onChange, label }: { value: string; onChange: (url: string) => void; label: string }) {
+  const [tab, setTab] = useState<"url" | "upload">("url");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const result = await api.uploadFile(file);
+    if (result?.url) {
+      onChange(result.url);
+    }
+    setUploading(false);
+  };
+
+  return (
+    <div>
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><ImagePlus className="w-3 h-3" /> {label}</label>
+      <div className="flex gap-1 mb-2 bg-sf-cream dark:bg-slate-700 rounded-lg p-0.5">
+        <button onClick={() => setTab("url")} className={cn("flex-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center justify-center gap-1", tab === "url" ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-xs" : "text-slate-500")}>
+          <LinkIcon className="w-3 h-3" /> URL
+        </button>
+        <button onClick={() => setTab("upload")} className={cn("flex-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center justify-center gap-1", tab === "upload" ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 shadow-xs" : "text-slate-500")}>
+          <Upload className="w-3 h-3" /> Upload
+        </button>
+      </div>
+      {tab === "url" ? (
+        <input type="url" value={value} onChange={(e) => onChange(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" placeholder="https://example.com/image.jpg" />
+      ) : (
+        <div
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f) handleUpload(f); }}
+          className="w-full px-3 py-4 border-2 border-dashed border-sf-cream-dark dark:border-slate-600 rounded-lg text-center cursor-pointer hover:border-sf-gold/50 transition-colors"
+        >
+          {uploading ? (
+            <p className="text-xs text-slate-400">Uploading...</p>
+          ) : (
+            <p className="text-xs text-slate-400"><Upload className="w-4 h-4 mx-auto mb-1" /> Click or drag image here</p>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
+        </div>
+      )}
+      {value && (
+        <div className="mt-2 rounded-lg overflow-hidden h-24 border border-sf-cream-dark dark:border-slate-600 relative">
+          <img src={value} alt="Preview" className="w-full h-full object-cover" />
+          <button onClick={() => onChange("")} className="absolute top-1 right-1 p-1 rounded bg-black/50 text-white hover:bg-red-600 transition-colors"><X className="w-3 h-3" /></button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Announcement Editor Modal ──────────────────────────────────
+
 function AnnouncementEditorModal({ announcement, departments, onClose, onSave }: {
   announcement: Announcement | null; departments: Department[]; onClose: () => void; onSave: () => void;
 }) {
   const [title, setTitle] = useState(announcement?.title ?? "");
   const [content, setContent] = useState(announcement?.content ?? "");
   const [type, setType] = useState(announcement?.type ?? "info");
-  const [departmentId, setDepartmentId] = useState(announcement?.departmentId ?? "");
+  const [selectedDeptIds, setSelectedDeptIds] = useState<string[]>(announcement?.departmentIds ?? []);
   const [priority, setPriority] = useState(announcement?.priority ?? 0);
   const [isPinned, setIsPinned] = useState(announcement?.isPinned ?? false);
   const [imageUrl, setImageUrl] = useState(announcement?.imageUrl ?? "");
   const [emoji, setEmoji] = useState(announcement?.emoji ?? "");
   const [gridSize, setGridSize] = useState(announcement?.gridSize ?? "medium");
   const [expiresAt, setExpiresAt] = useState(announcement?.expiresAt?.slice(0, 10) ?? "");
+  const [sendToWebhook, setSendToWebhook] = useState(announcement?.sendToWebhook ?? false);
   const [saving, setSaving] = useState(false);
+
+  const toggleDept = (id: string) => {
+    setSelectedDeptIds((prev) => prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]);
+  };
 
   const handleSave = async () => {
     if (!title.trim()) return;
     setSaving(true);
     const data = {
-      title: title.trim(), content, type, departmentId: departmentId || null,
+      title: title.trim(), content, type, departmentIds: selectedDeptIds,
       priority, isPinned, imageUrl: imageUrl || null, emoji: emoji || null,
-      gridSize, expiresAt: expiresAt || null,
+      gridSize, sendToWebhook, expiresAt: expiresAt || null,
     };
     if (announcement) { await api.updateAnnouncement(announcement.id, data as any); }
     else { await api.createAnnouncement(data); }
@@ -434,16 +618,8 @@ function AnnouncementEditorModal({ announcement, departments, onClose, onSave }:
             </div>
           </div>
 
-          {/* Image URL */}
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><ImagePlus className="w-3 h-3" /> Image URL (optional)</label>
-            <input type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" placeholder="https://example.com/image.jpg" />
-            {imageUrl && (
-              <div className="mt-2 rounded-lg overflow-hidden h-24 border border-sf-cream-dark dark:border-slate-600">
-                <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
-              </div>
-            )}
-          </div>
+          {/* Image */}
+          <ImageUploadInput value={imageUrl} onChange={setImageUrl} label="Image (optional)" />
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -463,21 +639,27 @@ function AnnouncementEditorModal({ announcement, departments, onClose, onSave }:
                 <option value="wide">Wide (2x1)</option>
                 <option value="tall">Tall (1x2)</option>
                 <option value="large">Large (2x2)</option>
+                <option value="xlarge">X-Large (3x2)</option>
+                <option value="tall-3">Tall 3 (1x3)</option>
+                <option value="tall-4">Tall 4 (1x4)</option>
+                <option value="hero">Hero (3x1)</option>
+                <option value="hero-3">Hero 3 (3x3)</option>
+                <option value="hero-4">Hero 4 (3x4)</option>
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Department</label>
-              <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm">
-                <option value="">All Departments</option>
-                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Expires On</label>
-              <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" />
+          {/* Multi-department checkboxes */}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Departments (leave empty for all)</label>
+            <div className="flex flex-wrap gap-2">
+              {departments.map((d) => (
+                <label key={d.id} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors", selectedDeptIds.includes(d.id) ? "border-sf-gold bg-sf-cream dark:bg-slate-700 text-sf-brown dark:text-slate-100" : "border-sf-cream-dark dark:border-slate-600 text-slate-500 hover:border-sf-gold/30")}>
+                  <input type="checkbox" checked={selectedDeptIds.includes(d.id)} onChange={() => toggleDept(d.id)} className="sr-only" />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                  {d.name}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -490,12 +672,23 @@ function AnnouncementEditorModal({ announcement, departments, onClose, onSave }:
                 <option value={2}>Urgent</option>
               </select>
             </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer pb-2">
-                <input type="checkbox" checked={isPinned} onChange={(e) => setIsPinned(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-sf-brown focus:ring-sf-gold" />
-                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">Pin to top</span>
-              </label>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Expires On</label>
+              <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" />
             </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={isPinned} onChange={(e) => setIsPinned(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-sf-brown focus:ring-sf-gold" />
+              <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">Pin to top</span>
+            </label>
+            {selectedDeptIds.length > 0 && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={sendToWebhook} onChange={(e) => setSendToWebhook(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-green-600 focus:ring-green-500" />
+                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1"><Send className="w-3 h-3 text-green-600" /> Send to WhatsApp</span>
+              </label>
+            )}
           </div>
         </div>
 
@@ -508,7 +701,9 @@ function AnnouncementEditorModal({ announcement, departments, onClose, onSave }:
   );
 }
 
-function BannerEditorModal({ banner, onClose, onSave }: { banner: Banner | null; onClose: () => void; onSave: () => void }) {
+// ─── Banner Editor Modal ────────────────────────────────────────
+
+function BannerEditorModal({ banner, departments, onClose, onSave }: { banner: Banner | null; departments: Department[]; onClose: () => void; onSave: () => void }) {
   const [title, setTitle] = useState(banner?.title ?? "");
   const [subtitle, setSubtitle] = useState(banner?.subtitle ?? "");
   const [bgColor, setBgColor] = useState(banner?.bgColor ?? "#5C3A1E");
@@ -516,6 +711,7 @@ function BannerEditorModal({ banner, onClose, onSave }: { banner: Banner | null;
   const [gradient, setGradient] = useState(banner?.gradient ?? "");
   const [imageUrl, setImageUrl] = useState(banner?.imageUrl ?? "");
   const [linkUrl, setLinkUrl] = useState(banner?.linkUrl ?? "");
+  const [sendToWebhook, setSendToWebhook] = useState(banner?.sendToWebhook ?? false);
   const [saving, setSaving] = useState(false);
 
   const previewStyle: React.CSSProperties = {
@@ -526,8 +722,11 @@ function BannerEditorModal({ banner, onClose, onSave }: { banner: Banner | null;
   const handleSave = async () => {
     if (!title.trim()) return;
     setSaving(true);
-    await api.createBanner({ title: title.trim(), subtitle, bgColor, textColor, gradient: gradient || undefined, imageUrl: imageUrl || undefined, linkUrl: linkUrl || undefined });
-    if (banner) { await api.updateBanner(banner.id, { title: title.trim(), subtitle, bgColor, textColor, gradient: gradient || null, imageUrl: imageUrl || null, linkUrl: linkUrl || null } as any); }
+    if (banner) {
+      await api.updateBanner(banner.id, { title: title.trim(), subtitle, bgColor, textColor, gradient: gradient || null, imageUrl: imageUrl || null, linkUrl: linkUrl || null, sendToWebhook } as any);
+    } else {
+      await api.createBanner({ title: title.trim(), subtitle, bgColor, textColor, gradient: gradient || undefined, imageUrl: imageUrl || undefined, linkUrl: linkUrl || undefined, sendToWebhook });
+    }
     setSaving(false); onSave();
   };
 
@@ -566,10 +765,7 @@ function BannerEditorModal({ banner, onClose, onSave }: { banner: Banner | null;
           </div>
 
           {/* Background Image */}
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><ImagePlus className="w-3 h-3" /> Background Image URL</label>
-            <input type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" placeholder="https://example.com/image.jpg" />
-          </div>
+          <ImageUploadInput value={imageUrl} onChange={setImageUrl} label="Background Image" />
 
           {/* Gradient Presets */}
           <div>
@@ -606,6 +802,11 @@ function BannerEditorModal({ banner, onClose, onSave }: { banner: Banner | null;
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Link URL (optional)</label>
             <input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" placeholder="https://..." />
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={sendToWebhook} onChange={(e) => setSendToWebhook(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-green-600 focus:ring-green-500" />
+            <span className="text-sm text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1"><Send className="w-3 h-3 text-green-600" /> Send to WhatsApp</span>
+          </label>
         </div>
 
         <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-sf-cream-dark dark:border-slate-700">

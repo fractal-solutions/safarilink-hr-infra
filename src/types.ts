@@ -48,6 +48,7 @@ export interface Department {
   color: string;
   icon: string;
   sortOrder: number;
+  webhookUrl?: string | null;
   createdAt: string;
 }
 
@@ -56,14 +57,15 @@ export interface Announcement {
   title: string;
   content: string;
   type: "info" | "alert" | "deadline" | "warning";
-  departmentId: string | null;
-  departmentName: string | null;
-  departmentColor: string | null;
+  departmentIds: string[];
+  departmentNames: string[];
+  departmentColors: string[];
   priority: number;
   isPinned: boolean;
   imageUrl: string | null;
   emoji: string | null;
-  gridSize: "small" | "medium" | "large" | "wide" | "tall";
+  gridSize: "small" | "medium" | "large" | "wide" | "tall" | "xlarge" | "tall-3" | "tall-4" | "hero" | "hero-3" | "hero-4";
+  sendToWebhook: boolean;
   expiresAt: string | null;
   createdBy: string;
   authorName: string | null;
@@ -82,5 +84,6 @@ export interface Banner {
   linkUrl: string | null;
   sortOrder: number;
   isActive: boolean;
+  sendToWebhook: boolean;
   createdAt: string;
 }

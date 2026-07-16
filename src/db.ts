@@ -222,6 +222,86 @@ db.exec(`
   )
 `);
 
+// Migration: user_departments junction table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_departments (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, department_id)
+  )
+`);
+
+// Migration: announcement_departments junction table (replaces single department_id)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS announcement_departments (
+    announcement_id TEXT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+    department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+    PRIMARY KEY (announcement_id, department_id)
+  )
+`);
+
+// Migration: department_webhooks table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS department_webhooks (
+    department_id TEXT PRIMARY KEY REFERENCES departments(id) ON DELETE CASCADE,
+    webhook_url TEXT
+  )
+`);
+
+// Migration: add send_to_webhook column to announcements
+try {
+  db.exec("ALTER TABLE announcements ADD COLUMN send_to_webhook INTEGER NOT NULL DEFAULT 0");
+  console.log("Migration: added send_to_webhook to announcements");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration announcements send_to_webhook:", e.message);
+}
+
+// Migration: add send_to_webhook column to banners
+try {
+  db.exec("ALTER TABLE banners ADD COLUMN send_to_webhook INTEGER NOT NULL DEFAULT 0");
+  console.log("Migration: added send_to_webhook to banners");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration banners send_to_webhook:", e.message);
+}
+
+// Migration: ensure "general" department exists
+const generalDept = db.query("SELECT id FROM departments WHERE slug = 'general'").get() as any;
+if (!generalDept) {
+  const now = new Date().toISOString();
+  const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM departments").get() as any)?.m ?? -1;
+  db.run(
+    `INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ["dept-general", "General", "general", "#6B7280", "building", maxOrder + 1, now]
+  );
+  console.log("Migration: created 'general' department");
+}
+
+// Migration: assign all users to "general" if they have no departments
+const usersWithoutDepts = db.query(
+  `SELECT u.id FROM users u WHERE NOT EXISTS (SELECT 1 FROM user_departments ud WHERE ud.user_id = u.id)`
+).all() as any[];
+if (usersWithoutDepts.length > 0) {
+  const generalId = (db.query("SELECT id FROM departments WHERE slug = 'general'").get() as any).id;
+  for (const u of usersWithoutDepts) {
+    db.run("INSERT OR IGNORE INTO user_departments (user_id, department_id) VALUES (?, ?)", [u.id, generalId]);
+  }
+  console.log(`Migration: assigned ${usersWithoutDepts.length} users to 'general' department`);
+}
+
+// Migration: migrate existing announcements.department_id into announcement_departments
+const annsWithDept = db.query(
+  "SELECT id, department_id FROM announcements WHERE department_id IS NOT NULL"
+).all() as any[];
+for (const ann of annsWithDept) {
+  db.run(
+    "INSERT OR IGNORE INTO announcement_departments (announcement_id, department_id) VALUES (?, ?)",
+    [ann.id, ann.department_id]
+  );
+}
+if (annsWithDept.length > 0) {
+  console.log(`Migration: migrated ${annsWithDept.length} announcements to multi-department`);
+}
+
 const userCount = db.query("SELECT COUNT(*) as cnt FROM users").get() as any;
 if (userCount.cnt === 0) {
   const now = new Date().toISOString();
@@ -232,16 +312,23 @@ if (userCount.cnt === 0) {
 
   db.run(
     `INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ["dept-hr", "Human Resources", "hr", "#5C3A1E", "users", 0, now]
+    ["dept-general", "General", "general", "#6B7280", "building", 0, now]
   );
   db.run(
     `INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ["dept-finance", "Finance", "finance", "#1E5C3A", "calculator", 1, now]
+    ["dept-hr", "Human Resources", "hr", "#5C3A1E", "users", 1, now]
   );
   db.run(
     `INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ["dept-ops", "Operations", "operations", "#3A1E5C", "settings", 2, now]
+    ["dept-finance", "Finance", "finance", "#1E5C3A", "calculator", 2, now]
   );
+  db.run(
+    `INSERT INTO departments (id, name, slug, color, icon, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ["dept-ops", "Operations", "operations", "#3A1E5C", "settings", 3, now]
+  );
+
+  // Assign admin to general department
+  db.run("INSERT INTO user_departments (user_id, department_id) VALUES (?, ?)", ["usr-admin", "dept-general"]);
 
   db.run(
     `INSERT INTO documents (id, title, sort_order, archived, created_at, department_id) VALUES (?, ?, ?, ?, ?, ?)`,
