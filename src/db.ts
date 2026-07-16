@@ -244,9 +244,26 @@ db.exec(`
 db.exec(`
   CREATE TABLE IF NOT EXISTS department_webhooks (
     department_id TEXT PRIMARY KEY REFERENCES departments(id) ON DELETE CASCADE,
-    webhook_url TEXT
+    webhook_url TEXT,
+    phone_number TEXT
   )
 `);
+
+// Migration: system_settings table (global config like webhook URL)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )
+`);
+
+// Migration: add phone_number to department_webhooks
+try {
+  db.exec("ALTER TABLE department_webhooks ADD COLUMN phone_number TEXT");
+  console.log("Migration: added phone_number to department_webhooks");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration department_webhooks phone_number:", e.message);
+}
 
 // Migration: add send_to_webhook column to announcements
 try {

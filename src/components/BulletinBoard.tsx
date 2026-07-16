@@ -159,7 +159,7 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
           {banners.map((banner) => (
             <div
               key={banner.id}
-              className="rounded-2xl overflow-hidden shadow-lg relative group"
+              className="rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 relative group"
               style={{
                 background: banner.gradient || banner.imageUrl ? undefined : banner.bgColor,
                 color: banner.textColor,
@@ -272,14 +272,14 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
             {departments.map((dept) => {
               const deptDocs = documents.filter((d) => d.departmentId === dept.id);
               return (
-                <button key={dept.id} onClick={() => onSelectDepartment(dept.id)} className="text-left p-4 bg-white dark:bg-slate-800 rounded-xl border border-sf-cream-dark dark:border-slate-700 hover:border-sf-gold/40 dark:hover:border-sf-gold/30 hover:shadow-md transition-all group">
+                <button key={dept.id} onClick={() => onSelectDepartment(dept.id)} className="text-left p-4 bg-white dark:bg-slate-800 rounded-2xl border border-sf-cream-dark dark:border-slate-700 hover:border-sf-gold/40 dark:hover:border-sf-gold/30 hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5 transition-all duration-200 group">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: dept.color }}>{dept.name.charAt(0)}</div>
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm" style={{ backgroundColor: dept.color }}>{dept.name.charAt(0)}</div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{dept.name}</p>
                       <p className="text-[11px] text-slate-400">{deptDocs.length} manual{deptDocs.length !== 1 ? "s" : ""}</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0 group-hover:text-sf-gold transition-colors" />
+                    <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0 group-hover:text-sf-gold group-hover:translate-x-0.5 transition-all" />
                   </div>
                 </button>
               );
@@ -359,8 +359,8 @@ function AnnouncementDetailModal({ announcement: ann, isAdmin, onClose, onEdit }
         <div className="flex-1 overflow-y-auto">
           {/* Image */}
           {ann.imageUrl && (
-            <div className="w-full">
-              <img src={ann.imageUrl} alt={ann.title} className="w-full max-h-[50vh] object-contain bg-black/5" />
+            <div className="w-full bg-gradient-to-b from-slate-100 to-white dark:from-slate-800 dark:to-slate-800">
+              <img src={ann.imageUrl} alt={ann.title} className="w-full max-h-[55vh] object-contain" />
             </div>
           )}
 
@@ -368,9 +368,9 @@ function AnnouncementDetailModal({ announcement: ann, isAdmin, onClose, onEdit }
             {/* Title + emoji */}
             <div className="flex items-start gap-3">
               {ann.emoji && !ann.imageUrl && (
-                <span className="text-3xl shrink-0 leading-none mt-0.5">{ann.emoji}</span>
+                <span className="text-4xl shrink-0 leading-none mt-0.5">{ann.emoji}</span>
               )}
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">{ann.title}</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{ann.title}</h2>
             </div>
 
             {/* Content */}
@@ -420,9 +420,11 @@ function BentoCard({ announcement: ann, isAdmin, onClick, onEdit, onDelete, dele
   const isTall4 = gridSize === "tall-4" || gridSize === "hero-4";
   const isHero = gridSize === "hero" || gridSize === "hero-3" || gridSize === "hero-4";
   const hasImage = !!ann.imageUrl;
+  const isSmall = !isMultiRow && !isHero;
+  const isTruncated = isSmall && ann.content && ann.content.length > 120;
 
-  // Image height based on row span
-  const imageHeightClass = isTall4 ? "h-56" : isTall3 ? "h-44" : isHero ? "h-36" : isMultiRow ? "h-32" : "h-24";
+  // Responsive image heights: mobile first, then sm breakpoint
+  const imageHeightClass = isTall4 ? "h-40 sm:h-56" : isTall3 ? "h-36 sm:h-44" : isHero ? "h-32 sm:h-40" : isMultiRow ? "h-28 sm:h-36" : "h-24 sm:h-28";
 
   return (
     <div
@@ -434,17 +436,18 @@ function BentoCard({ announcement: ann, isAdmin, onClick, onEdit, onDelete, dele
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       onClick={onClick}
-      className={cn("rounded-xl border overflow-hidden transition-all relative group flex flex-col cursor-pointer hover:shadow-md hover:border-sf-gold/30", config.border, GRID_SIZE_CLASSES[gridSize], isDragging && "opacity-40 scale-95", isDropTarget && "ring-2 ring-sf-gold/50 border-sf-gold border-dashed bg-sf-cream/30")}
+      className={cn("rounded-2xl border overflow-hidden transition-all duration-200 relative group flex flex-col cursor-pointer bg-white dark:bg-slate-800 hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5 hover:border-sf-gold/40", config.border, GRID_SIZE_CLASSES[gridSize], isDragging && "opacity-40 scale-95", isDropTarget && "ring-2 ring-sf-gold/50 border-sf-gold border-dashed bg-sf-cream/30")}
     >
       {/* Image */}
       {hasImage && (
-        <div className={cn("w-full overflow-hidden", imageHeightClass)}>
-          <img src={ann.imageUrl!} alt={ann.title} className="w-full h-full object-cover" />
+        <div className={cn("w-full overflow-hidden relative shrink-0", imageHeightClass)}>
+          <img src={ann.imageUrl!} alt={ann.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
         </div>
       )}
 
-      <div className={cn("flex-1 p-4", !hasImage && config.bg)}>
-        <div className="flex items-start gap-3">
+      <div className={cn("flex-1 p-4 min-h-0", !hasImage && config.bg)}>
+        <div className="flex items-start gap-3 h-full">
           {ann.emoji && !hasImage && (
             <span className="text-2xl shrink-0 leading-none">{ann.emoji}</span>
           )}
@@ -453,16 +456,22 @@ function BentoCard({ announcement: ann, isAdmin, onClick, onEdit, onDelete, dele
               <Icon className={cn("w-4 h-4", config.color)} />
             </div>
           )}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-col">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h4 className={cn("font-bold text-slate-900 dark:text-slate-100", isMultiRow || isHero ? "text-lg" : "text-sm")}>{ann.title}</h4>
               {ann.isPinned && <Pin className="w-3 h-3 text-sf-gold shrink-0" />}
               <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", config.bg, config.color)}>{config.label}</span>
             </div>
+            {/* Content with foggy bottom for truncated text */}
             {ann.content && (
-              <p className={cn("text-slate-600 dark:text-slate-400 leading-relaxed", isMultiRow || isHero ? "text-sm" : "text-xs", isMultiRow || isHero ? "" : "line-clamp-3")}>{ann.content}</p>
+              <div className="relative flex-1 min-h-0">
+                <p className={cn("text-slate-600 dark:text-slate-400 leading-relaxed", isMultiRow || isHero ? "text-sm" : "text-xs", isSmall && "line-clamp-3")}>{ann.content}</p>
+                {isTruncated && !isMultiRow && (
+                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-slate-800 via-white/80 dark:via-slate-800/80 to-transparent pointer-events-none" />
+                )}
+              </div>
             )}
-            <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-400 flex-wrap">
+            <div className="flex items-center gap-3 mt-auto pt-2 text-[11px] text-slate-400 flex-wrap shrink-0">
               {ann.departmentNames.length > 0 && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ann.departmentColors[0] || "#999" }} />

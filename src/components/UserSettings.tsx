@@ -42,7 +42,7 @@ export function UserSettings({ isOpen, onClose, currentUser, departments = [], o
 
   useEffect(() => {
     if (isOpen) {
-      load();
+      if (currentUser?.role === "admin") load();
       loadMyDepts();
       setConfirmDelete(null);
       setEditingPassword(null);

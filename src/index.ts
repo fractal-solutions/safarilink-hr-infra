@@ -956,27 +956,51 @@ const server = serve({
       },
     },
 
-    // ─── Department Webhooks ──────────────────────────────────
+    // ─── Department Webhooks (phone numbers only) ─────────────
 
     "/api/departments/:id/webhook": {
       async GET(req) {
         const user = getSessionUser(req);
         if (!user) return unauthorized();
         const { id } = req.params;
-        const row = db.query("SELECT webhook_url FROM department_webhooks WHERE department_id = ?").get(id) as any;
-        return json({ webhookUrl: row?.webhook_url || null });
+        const row = db.query("SELECT phone_number FROM department_webhooks WHERE department_id = ?").get(id) as any;
+        return json({ phoneNumber: row?.phone_number || null });
       },
 
       async PUT(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
         const { id } = req.params;
-        const { webhookUrl } = await readBody(req);
+        const { phoneNumber } = await readBody(req);
         const existing = db.query("SELECT department_id FROM department_webhooks WHERE department_id = ?").get(id);
         if (existing) {
-          db.query("UPDATE department_webhooks SET webhook_url = ? WHERE department_id = ?").run(webhookUrl || null, id);
+          db.query("UPDATE department_webhooks SET phone_number = ? WHERE department_id = ?").run(phoneNumber || null, id);
+        } else if (phoneNumber) {
+          db.query("INSERT INTO department_webhooks (department_id, phone_number) VALUES (?, ?)").run(id, phoneNumber);
+        }
+        return json({ ok: true });
+      },
+    },
+
+    // ─── Global Webhook URL ──────────────────────────────────
+
+    "/api/settings/webhook": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const row = db.query("SELECT value FROM system_settings WHERE key = 'webhook_url'").get() as any;
+        return json({ webhookUrl: row?.value || null });
+      },
+
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { webhookUrl } = await readBody(req);
+        const existing = db.query("SELECT key FROM system_settings WHERE key = 'webhook_url'").get();
+        if (existing) {
+          db.query("UPDATE system_settings SET value = ? WHERE key = 'webhook_url'").run(webhookUrl || null);
         } else if (webhookUrl) {
-          db.query("INSERT INTO department_webhooks (department_id, webhook_url) VALUES (?, ?)").run(id, webhookUrl);
+          db.query("INSERT INTO system_settings (key, value) VALUES ('webhook_url', ?)").run(webhookUrl);
         }
         return json({ ok: true });
       },
@@ -1067,25 +1091,28 @@ const server = serve({
 
         // Fire webhooks if enabled
         if (sendToWebhook) {
-          const targetDepts = Array.isArray(departmentIds) && departmentIds.length > 0
-            ? departmentIds
-            : [];
-          const webhookDepts = targetDepts.length > 0
-            ? db.query(`SELECT d.id, d.name, dw.webhook_url FROM departments d JOIN department_webhooks dw ON d.id = dw.department_id WHERE d.id IN (${targetDepts.map(() => "?").join(",")}) AND dw.webhook_url IS NOT NULL`).all(...targetDepts) as any[]
-            : db.query(`SELECT d.id, d.name, dw.webhook_url FROM departments d JOIN department_webhooks dw ON d.id = dw.department_id WHERE dw.webhook_url IS NOT NULL`).all() as any[];
+          const globalWebhook = db.query("SELECT value FROM system_settings WHERE key = 'webhook_url'").get() as any;
+          if (globalWebhook?.value) {
+            // Get phone numbers for targeted departments
+            const targetDepts = Array.isArray(departmentIds) && departmentIds.length > 0
+              ? departmentIds
+              : [];
+            const deptPhones = targetDepts.length > 0
+              ? db.query(`SELECT d.id, d.name, dw.phone_number FROM departments d LEFT JOIN department_webhooks dw ON d.id = dw.department_id WHERE d.id IN (${targetDepts.map(() => "?").join(",")})`).all(...targetDepts) as any[]
+              : [];
 
-          for (const dept of webhookDepts) {
-            fireWebhook(dept.webhook_url, {
+            const payload = {
               type: "announcement",
               title: title.trim(),
               content: content || "",
               image_url: imageUrl || null,
               emoji: emoji || null,
-              departments: [{ id: dept.id, name: dept.name }],
+              departments: deptPhones.map((d: any) => ({ id: d.id, name: d.name, phone_number: d.phone_number || null })),
               priority: ["normal", "high", "urgent"][priority ?? 0] || "normal",
               author: user.display_name,
               created_at: now,
-            });
+            };
+            fireWebhook(globalWebhook.value, payload);
           }
         }
 
@@ -1207,19 +1234,23 @@ const server = serve({
 
         // Fire webhooks if enabled
         if (sendToWebhook) {
-          const webhookDepts = db.query(
-            `SELECT d.id, d.name, dw.webhook_url FROM departments d JOIN department_webhooks dw ON d.id = dw.department_id WHERE dw.webhook_url IS NOT NULL`
-          ).all() as any[];
-          for (const dept of webhookDepts) {
-            fireWebhook(dept.webhook_url, {
+          const globalWebhook = db.query("SELECT value FROM system_settings WHERE key = 'webhook_url'").get() as any;
+          if (globalWebhook?.value) {
+            // Get all departments with phone numbers
+            const deptPhones = db.query(
+              `SELECT d.id, d.name, dw.phone_number FROM departments d LEFT JOIN department_webhooks dw ON d.id = dw.department_id WHERE dw.phone_number IS NOT NULL`
+            ).all() as any[];
+
+            const payload = {
               type: "banner",
               title: title.trim(),
               content: subtitle || "",
               image_url: imageUrl || null,
-              departments: [{ id: dept.id, name: dept.name }],
+              departments: deptPhones.map((d: any) => ({ id: d.id, name: d.name, phone_number: d.phone_number })),
               author: user.display_name,
               created_at: now,
-            });
+            };
+            fireWebhook(globalWebhook.value, payload);
           }
         }
 

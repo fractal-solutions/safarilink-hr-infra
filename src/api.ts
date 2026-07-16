@@ -138,13 +138,26 @@ export async function removeMyDepartment(departmentId: string): Promise<boolean>
   return res !== null;
 }
 
-// Department Webhooks
-export async function getDepartmentWebhook(departmentId: string): Promise<{ webhookUrl: string | null }> {
-  return (await request<{ webhookUrl: string | null }>(`/departments/${departmentId}/webhook`)) ?? { webhookUrl: null };
+// Department Webhooks (phone numbers)
+export async function getDepartmentWebhook(departmentId: string): Promise<{ phoneNumber: string | null }> {
+  return (await request<{ phoneNumber: string | null }>(`/departments/${departmentId}/webhook`)) ?? { phoneNumber: null };
 }
 
-export async function setDepartmentWebhook(departmentId: string, webhookUrl: string): Promise<boolean> {
+export async function setDepartmentWebhook(departmentId: string, phoneNumber: string): Promise<boolean> {
   const res = await request(`/departments/${departmentId}/webhook`, {
+    method: "PUT",
+    body: JSON.stringify({ phoneNumber }),
+  });
+  return res !== null;
+}
+
+// Global Webhook URL
+export async function getGlobalWebhook(): Promise<{ webhookUrl: string | null }> {
+  return (await request<{ webhookUrl: string | null }>("/settings/webhook")) ?? { webhookUrl: null };
+}
+
+export async function setGlobalWebhook(webhookUrl: string): Promise<boolean> {
+  const res = await request("/settings/webhook", {
     method: "PUT",
     body: JSON.stringify({ webhookUrl }),
   });

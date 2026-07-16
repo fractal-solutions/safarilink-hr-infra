@@ -42,6 +42,7 @@ interface UserDocStats {
 interface UserStat extends User {
   docStats: UserDocStats[];
   overallPct: number;
+  departments: { id: string; name: string; color: string }[];
 }
 
 export function ReportsView({
@@ -59,9 +60,19 @@ export function ReportsView({
   const [auditTab, setAuditTab] = useState<"sections" | "audit">("sections");
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [showTrend, setShowTrend] = useState(false);
+  const [userDeptsMap, setUserDeptsMap] = useState<Record<string, { id: string; name: string; color: string }[]>>({});
 
   useEffect(() => {
-    import("@/auth").then(({ getAllUsers }) => getAllUsers().then(setAllUsers));
+    import("@/auth").then(({ getAllUsers }) => getAllUsers().then((users) => {
+      setAllUsers(users);
+      // Fetch departments for each user
+      const staffUsers = users.filter((u) => u.role !== "admin");
+      staffUsers.forEach((u) => {
+        api.getUserDepartments(u.id).then((depts) => {
+          setUserDeptsMap((prev) => ({ ...prev, [u.id]: depts }));
+        });
+      });
+    }));
     api.getAllTracking().then(setAllTracking);
     api.getTrend().then((data) => setTrend(data.trend));
   }, []);
@@ -95,9 +106,9 @@ export function ReportsView({
       const totalRead = docStats.reduce((sum, ds) => sum + ds.read, 0);
       const overallPct = totalSections > 0 ? Math.round((totalRead / totalSections) * 100) : 0;
 
-      return { ...user, docStats, overallPct };
+      return { ...user, docStats, overallPct, departments: userDeptsMap[user.id] || [] };
     });
-  }, [staffUsers, docs, allTracking, totalSections]);
+  }, [staffUsers, docs, allTracking, totalSections, userDeptsMap]);
 
   const sortedUsers = useMemo(() => {
     return [...userStats].sort((a, b) => a.overallPct - b.overallPct);
@@ -156,7 +167,7 @@ export function ReportsView({
   };
 
   const exportCSV = () => {
-    const headers = ["Name", "Payroll ID", "Username", "Email", ...docs.map((d) => d.title), "Overall %", "Status"];
+    const headers = ["Name", "Payroll ID", "Username", "Email", "Departments", ...docs.map((d) => d.title), "Overall %", "Status"];
     const rows = filteredUsers.map((u) => {
       const status = u.overallPct === 100 ? "Compliant" : u.overallPct === 0 ? "Not Started" : "In Progress";
       return [
@@ -164,6 +175,7 @@ export function ReportsView({
         u.payrollId || "",
         u.username,
         u.email || "",
+        u.departments.map((d) => d.name).join("; ") || "General",
         ...u.docStats.map((ds) => `${ds.read}/${ds.total} (${ds.pct}%)`),
         String(u.overallPct),
         status,
@@ -212,6 +224,7 @@ export function ReportsView({
             <div>
               <div style="font-weight:700;font-size:0.9rem;color:#5C3A1E">${u.displayName}</div>
               <div style="font-size:0.7rem;color:#888">${u.payrollId ? `ID: ${u.payrollId} · ` : ""}@${u.username}${u.email ? ` · ${u.email}` : ""}</div>
+              ${u.departments.length > 0 ? `<div style="font-size:0.65rem;color:#666;margin-top:3px">Departments: ${u.departments.map((d) => d.name).join(", ")}</div>` : ""}
             </div>
             <div style="text-align:right">
               <div style="font-size:1.3rem;font-weight:700;color:${u.overallPct === 100 ? '#5C3A1E' : u.overallPct > 0 ? '#C8A951' : '#999'}">${u.overallPct}%</div>
@@ -449,6 +462,17 @@ export function ReportsView({
                     <div className="text-[11px] text-slate-400 truncate">
                       @{u.username}{u.email && <span className="ml-1.5 text-sf-gold-dark">{u.email}</span>}
                     </div>
+                    {/* Departments */}
+                    {u.departments.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {u.departments.map((d) => (
+                          <span key={d.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                            {d.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="w-full bg-sf-cream-dark rounded-full h-1.5 mt-2 overflow-hidden">
                       <div
                         className={cn("h-1.5 rounded-full transition-all", getBarColor(u.overallPct))}
@@ -486,6 +510,16 @@ export function ReportsView({
                   {selectedUser.payrollId && <span className="text-sf-gold-dark font-medium mr-1.5">{selectedUser.payrollId}</span>}
                   @{selectedUser.username}{selectedUser.email && <span className="ml-1.5 text-sf-gold-dark">{selectedUser.email}</span>}
                 </p>
+                {selectedUser.departments.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {selectedUser.departments.map((d) => (
+                      <span key={d.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                        {d.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="text-right shrink-0">
                 <div className={cn(

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Lock, UserPlus } from "lucide-react";
+import { Lock, UserPlus, Eye, EyeOff } from "lucide-react";
 import * as api from "@/api";
 
 interface AuthModalProps {
@@ -14,6 +14,7 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
   const [displayName, setDisplayName] = useState("");
   const [payrollId, setPayrollId] = useState("");
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   if (!isOpen) return null;
 
@@ -66,40 +67,47 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 border border-sf-cream-dark dark:border-slate-700">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold text-sf-brown dark:text-slate-100 flex items-center gap-2">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-8 border border-sf-cream-dark dark:border-slate-700 animate-in fade-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-sf-brown flex items-center justify-center mx-auto mb-4 shadow-lg">
             {mode === "login" ? (
-              <><Lock className="w-5 h-5 text-sf-gold" /> Sign In</>
+              <Lock className="w-6 h-6 text-sf-gold" />
             ) : (
-              <><UserPlus className="w-5 h-5 text-sf-gold" /> Create Account</>
+              <UserPlus className="w-6 h-6 text-sf-gold" />
             )}
-          </h3>
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+            {mode === "login" ? "Welcome Back" : "Create Account"}
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            {mode === "login" ? "Sign in to access your policies" : "Join the team"}
+          </p>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {mode === "signup" && (
             <>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Display Name</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Display Name</label>
                 <input
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sf-gold/40 focus:border-sf-gold/50 text-sm transition-all"
                   placeholder="e.g., Joseph Kiprop"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Payroll ID</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Payroll ID</label>
                 <input
                   type="text"
                   value={payrollId}
                   onChange={(e) => setPayrollId(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sf-gold/40 focus:border-sf-gold/50 text-sm transition-all"
                   placeholder="e.g., SL-00123"
                 />
               </div>
@@ -107,7 +115,7 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
               {mode === "login" ? "Username or Payroll ID" : "Username"}
             </label>
             <input
@@ -115,37 +123,50 @@ export function AuthModal({ isOpen, onAuth }: AuthModalProps) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+              className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sf-gold/40 focus:border-sf-gold/50 text-sm transition-all"
               placeholder={mode === "login" ? "Username or Payroll ID" : "e.g., jkiprop"}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
-              placeholder={mode === "login" ? "Password or Payroll ID" : "At least 4 characters"}
-            />
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                className="w-full px-4 py-2.5 pr-10 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sf-gold/40 focus:border-sf-gold/50 text-sm transition-all"
+                placeholder={mode === "login" ? "Password or Payroll ID" : "At least 4 characters"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
+          {error && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+              <p className="text-red-600 dark:text-red-400 text-xs font-medium">{error}</p>
+            </div>
+          )}
 
           <button
             onClick={handleSubmit}
-            className="w-full bg-sf-brown hover:bg-sf-brown-dark text-white font-medium py-2 rounded-lg transition-colors shadow-xs"
+            className="w-full bg-sf-brown hover:bg-sf-brown-dark text-white font-semibold py-2.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg hover:shadow-sf-brown/20 active:scale-[0.98]"
           >
             {mode === "login" ? "Sign In" : "Create Account"}
           </button>
 
           <p className="text-center text-xs text-slate-500 dark:text-slate-400">
             {mode === "login" ? (
-              <>Don&apos;t have an account? <button onClick={() => { setMode("signup"); setError(""); }} className="text-sf-gold hover:text-sf-gold-dark font-semibold">Create one</button></>
+              <>Don&apos;t have an account? <button onClick={() => { setMode("signup"); setError(""); }} className="text-sf-gold hover:text-sf-gold-dark font-semibold transition-colors">Create one</button></>
             ) : (
-              <>Already have an account? <button onClick={() => { setMode("login"); setError(""); }} className="text-sf-gold hover:text-sf-gold-dark font-semibold">Sign in</button></>
+              <>Already have an account? <button onClick={() => { setMode("login"); setError(""); }} className="text-sf-gold hover:text-sf-gold-dark font-semibold transition-colors">Sign in</button></>
             )}
           </p>
 

@@ -116,23 +116,23 @@ export function Sidebar({
 
   const sidebarContent = (
     <aside className={cn(
-      "w-full sm:w-[300px] sm:shrink-0 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-sf-cream-dark dark:border-slate-700 p-4 flex flex-col min-h-0",
+      "w-full sm:w-[300px] sm:shrink-0 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-sf-cream-dark dark:border-slate-700/50 p-4 flex flex-col min-h-0",
       !isOpen && "hidden sm:flex"
     )}>
-      <div className="flex justify-between items-center mb-4 pb-2 border-b border-sf-cream-dark dark:border-slate-800">
+      <div className="flex justify-between items-center mb-4 pb-3 border-b border-sf-cream-dark dark:border-slate-700/50">
         <h2 className="font-bold text-sf-brown dark:text-slate-100 text-sm tracking-wide uppercase flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-sf-gold" /> Policy Manuals
         </h2>
         <div className="flex items-center gap-2">
           {onClose && (
-            <button onClick={onClose} className="sm:hidden p-1.5 text-slate-400 hover:text-slate-600">
+            <button onClick={onClose} className="sm:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
               <X className="w-4 h-4" />
             </button>
           )}
           {currentRole === "admin" && (
             <button
               onClick={onCreateDoc}
-              className="bg-sf-cream hover:bg-sf-cream-dark dark:bg-sf-brown/30 dark:hover:bg-sf-brown/50 text-sf-brown dark:text-sf-gold p-1.5 rounded-lg border border-sf-cream-dark dark:border-sf-brown-light transition-colors"
+              className="bg-sf-cream hover:bg-sf-cream-dark dark:bg-sf-brown/30 dark:hover:bg-sf-brown/50 text-sf-brown dark:text-sf-gold p-1.5 rounded-xl border border-sf-cream-dark dark:border-sf-brown-light/30 transition-all hover:shadow-sm"
               title="Create New Document"
             >
               <Plus className="w-4 h-4" />
@@ -141,7 +141,7 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="space-y-1.5 overflow-y-auto flex-1 min-h-0">
+      <div className="space-y-1.5 overflow-y-auto flex-1 min-h-0 scrollbar-none">
         {filteredDocs.length === 0 && searchQuery.trim() && (
           <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">
             No results for "{searchQuery}"
@@ -169,7 +169,7 @@ export function Sidebar({
               onDrop={(e) => handleDrop(e, index)}
               onDragEnd={handleDragEnd}
               className={cn(
-                "rounded-lg border transition-all duration-150",
+                "rounded-xl border transition-all duration-150",
                 isDragging && "opacity-40 scale-95",
                 isDropTarget && !isDragging && "border-sf-gold border-dashed bg-sf-cream/50 ring-2 ring-sf-gold/30 dark:ring-sf-gold/20",
                 !isDragging && !isDropTarget && "border-transparent"
@@ -177,10 +177,10 @@ export function Sidebar({
             >
               <div
                 className={cn(
-                  "w-full text-left p-3 rounded-lg border transition-all flex flex-col gap-1.5",
+                  "w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex flex-col gap-1.5",
                   isActive
-                    ? "bg-sf-cream dark:bg-sf-brown/30 border-sf-gold/40 dark:border-sf-gold/30 text-sf-brown dark:text-sf-gold-light font-medium ring-1 ring-sf-gold/30 dark:ring-sf-gold/20"
-                    : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-sf-cream dark:hover:bg-slate-750"
+                    ? "bg-sf-cream dark:bg-sf-brown/30 border-sf-gold/40 dark:border-sf-gold/30 text-sf-brown dark:text-sf-gold-light font-medium ring-1 ring-sf-gold/20 shadow-sm"
+                    : "bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-sf-cream/50 dark:hover:bg-slate-700/50 hover:border-slate-200 dark:hover:border-slate-600"
                 )}
               >
                 <div

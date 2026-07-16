@@ -35,7 +35,9 @@ export function DocumentReader({
   if (!document) {
     return (
       <div className="text-center py-16 text-slate-400 dark:text-slate-500">
-        <BookMarked className="w-16 h-16 mx-auto mb-3 opacity-40" />
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+          <BookMarked className="w-8 h-8 opacity-40" />
+        </div>
         <p className="font-medium">
           No active document selection framework running.
         </p>

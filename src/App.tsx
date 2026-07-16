@@ -271,8 +271,17 @@ function AppInner() {
     return (
       <div className="h-screen flex items-center justify-center bg-sf-cream dark:bg-slate-950">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-sf-brown border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
+          <div className="w-12 h-12 rounded-2xl bg-sf-brown flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <svg viewBox="0 0 200 200" className="w-8 h-8">
+              <rect width="200" height="200" rx="32" fill="#5C3A1E"/>
+              <path d="M100 95 C90 85, 65 70, 30 60 C40 65, 55 72, 65 80 C50 75, 35 68, 18 62 C30 70, 50 80, 68 88 C55 84, 40 78, 25 74 C40 82, 58 90, 72 96 C62 93, 48 88, 35 84 C48 90, 62 96, 75 102 C68 100, 58 96, 50 92 C60 97, 72 102, 82 106 C78 105, 70 102, 64 99 C72 103, 82 108, 90 112 L95 108 Z" fill="#C8A951"/>
+              <path d="M100 95 C110 85, 135 70, 170 60 C160 65, 145 72, 135 80 C150 75, 165 68, 182 62 C170 70, 150 80, 132 88 C145 84, 160 78, 175 74 C160 82, 142 90, 128 96 C138 93, 152 88, 165 84 C152 90, 138 96, 125 102 C132 100, 142 96, 150 92 C140 97, 128 102, 118 106 C122 105, 130 102, 136 99 C128 103, 118 108, 110 112 L105 108 Z" fill="#C8A951"/>
+              <ellipse cx="100" cy="110" rx="12" ry="22" fill="#C8A951"/>
+              <circle cx="100" cy="85" r="10" fill="#C8A951"/>
+            </svg>
+          </div>
+          <div className="w-6 h-6 border-2 border-sf-brown/30 border-t-sf-brown rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Loading...</p>
         </div>
       </div>
     );
