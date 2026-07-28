@@ -81,6 +81,7 @@ function cookieClear(res: Response): Response {
 }
 
 const server = serve({
+  port: 4748,
   routes: {
     "/*": index,
 
