@@ -19,7 +19,7 @@ import { VersionHistory } from "@/components/VersionHistory";
 import { ImportExport } from "@/components/ImportExport";
 import { BulletinBoard } from "@/components/BulletinBoard";
 import { applyTheme } from "@/themes";
-import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X, Trash2, RotateCcw, ChevronDown, Menu, ChevronRight, Search } from "lucide-react";
+import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X, Trash2, RotateCcw, Search } from "lucide-react";
 
 function AppInner() {
   const { toast } = useToast();
@@ -52,8 +52,6 @@ function AppInner() {
   const [activeDepartmentId, setActiveDepartmentId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"bulletin" | "manuals">("bulletin");
   const [userTheme, setUserTheme] = useState("safari");
-  const [showMobileDocDrawer, setShowMobileDocDrawer] = useState(false);
-  const [mobileDeptOpen, setMobileDeptOpen] = useState(false);
 
   const loadDocs = useCallback(async () => {
     const docs = await api.getDocuments();
@@ -433,147 +431,87 @@ function AppInner() {
             />
           </div>
 
-          {/* Mobile Document Drawer (overlay) */}
-          {showMobileDocDrawer && (
-            <div className="fixed inset-0 z-50 sm:hidden">
-              <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileDocDrawer(false)} />
-              <div className="absolute inset-y-0 left-0 w-[85vw] max-w-[340px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left">
-                {/* Drawer header */}
-                <div className="flex items-center justify-between p-4 border-b border-sf-cream-dark dark:border-slate-700">
-                  <h3 className="font-bold text-sf-brown dark:text-slate-100 text-sm">Browse Manuals</h3>
-                  <button onClick={() => setShowMobileDocDrawer(false)} className="p-1.5 rounded-lg hover:bg-sf-cream dark:hover:bg-slate-800 text-slate-400">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Department filter pills */}
-                {departments.length > 0 && (
-                  <div className="flex gap-1.5 p-3 overflow-x-auto scrollbar-none border-b border-sf-cream-dark dark:border-slate-700">
-                    <button
-                      onClick={() => { setActiveDepartmentId(null); }}
-                      className={cn(
-                        "px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
-                        activeDepartmentId === null
-                          ? "bg-sf-brown text-white"
-                          : "bg-sf-cream dark:bg-slate-700 text-slate-500 dark:text-slate-400"
-                      )}
-                    >
-                      All
-                    </button>
-                    {departments.map((dept) => (
-                      <button
-                        key={dept.id}
-                        onClick={() => { setActiveDepartmentId(dept.id); }}
-                        className={cn(
-                          "px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0",
-                          activeDepartmentId === dept.id
-                            ? "text-white"
-                            : "bg-sf-cream dark:bg-slate-700 text-slate-500 dark:text-slate-400"
-                        )}
-                        style={activeDepartmentId === dept.id ? { backgroundColor: dept.color } : undefined}
-                      >
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dept.color }} />
-                        {dept.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Document list */}
-                <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-                  {documents
-                    .filter((doc) => !activeDepartmentId || doc.departmentId === activeDepartmentId)
-                    .map((doc) => {
-                      const totalSec = doc.sections.length;
-                      let readSec = 0;
-                      doc.sections.forEach((s) => { if (tracking[s.id]) readSec++; });
-                      const pct = totalSec > 0 ? Math.round((readSec / totalSec) * 100) : 0;
-                      const isActive = activeDocId === doc.id;
-
-                      return (
-                        <button
-                          key={doc.id}
-                          onClick={() => { handleSelectDoc(doc.id); setShowMobileDocDrawer(false); }}
-                          className={cn(
-                            "w-full text-left p-3 rounded-xl border transition-all",
-                            isActive
-                              ? "bg-sf-cream dark:bg-sf-brown/30 border-sf-gold/40 ring-1 ring-sf-gold/30"
-                              : "bg-white dark:bg-slate-800 border-sf-cream-dark dark:border-slate-700 hover:bg-sf-cream dark:hover:bg-slate-700"
-                          )}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate pr-2">{doc.title}</span>
-                            <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                            <span>{totalSec} section{totalSec !== 1 ? "s" : ""}</span>
-                            <span className="font-medium text-sf-brown-light dark:text-slate-400">{pct}% read</span>
-                          </div>
-                          <div className="w-full bg-sf-cream-dark dark:bg-slate-700 rounded-full h-1 mt-1.5 overflow-hidden">
-                            <div className="bg-sf-gold h-1 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                          </div>
-                        </button>
-                      );
-                    })}
-                  {documents.filter((doc) => !activeDepartmentId || doc.departmentId === activeDepartmentId).length === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-8">No manuals in this department.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Main content */}
           <section className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            {/* Mobile: compact top bar with Browse button + dept dropdown */}
-            <div className="sm:hidden bg-white dark:bg-slate-900 border-b border-sf-cream-dark dark:border-slate-700 px-4 py-2.5 shrink-0">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowMobileDocDrawer(true)}
-                  className="flex items-center gap-2 px-3 py-2 bg-sf-brown text-white rounded-lg text-xs font-semibold shrink-0"
-                >
-                  <Menu className="w-4 h-4" /> Browse
-                </button>
-                <div className="relative flex-1 min-w-0">
+            {/* Mobile: always-visible manual switcher */}
+            <div className="sm:hidden bg-white dark:bg-slate-900 border-b border-sf-cream-dark dark:border-slate-700 shrink-0">
+              {departments.length > 0 && (
+                <div className="flex gap-1.5 px-3 pt-2 pb-1.5 overflow-x-auto scrollbar-none">
                   <button
-                    onClick={() => setMobileDeptOpen(!mobileDeptOpen)}
-                    className="w-full flex items-center justify-between px-3 py-2 bg-sf-cream dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 border border-sf-cream-dark dark:border-slate-700"
+                    onClick={() => { setActiveDepartmentId(null); setActiveDocId(null); }}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors shrink-0",
+                      activeDepartmentId === null
+                        ? "bg-sf-brown text-white"
+                        : "bg-sf-cream dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                    )}
                   >
-                    <span className="flex items-center gap-1.5 truncate">
-                      {activeDepartmentId ? (
-                        <>
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: departments.find((d) => d.id === activeDepartmentId)?.color || "#999" }} />
-                          {departments.find((d) => d.id === activeDepartmentId)?.name || "Department"}
-                        </>
-                      ) : "All Departments"}
-                    </span>
-                    <ChevronDown className={cn("w-3.5 h-3.5 shrink-0 transition-transform", mobileDeptOpen && "rotate-180")} />
+                    All
                   </button>
-                  {mobileDeptOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 rounded-xl border border-sf-cream-dark dark:border-slate-700 shadow-xl z-10 overflow-hidden">
-                      <button
-                        onClick={() => { setActiveDepartmentId(null); setActiveDocId(null); setMobileDeptOpen(false); }}
-                        className={cn("w-full text-left px-3 py-2.5 text-xs font-medium border-b border-sf-cream-dark dark:border-slate-700", activeDepartmentId === null ? "bg-sf-cream dark:bg-slate-700 text-sf-brown dark:text-sf-gold" : "text-slate-600 dark:text-slate-400")}
-                      >
-                        All Departments
-                      </button>
-                      {departments.map((dept) => (
-                        <button
-                          key={dept.id}
-                          onClick={() => { setActiveDepartmentId(dept.id); setActiveDocId(null); setMobileDeptOpen(false); }}
-                          className={cn("w-full text-left px-3 py-2.5 text-xs font-medium flex items-center gap-2", activeDepartmentId === dept.id ? "bg-sf-cream dark:bg-slate-700" : "text-slate-600 dark:text-slate-400")}
-                        >
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dept.color }} />
-                          {dept.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {departments.map((dept) => (
+                    <button
+                      key={dept.id}
+                      onClick={() => { setActiveDepartmentId(dept.id); setActiveDocId(null); }}
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0",
+                        activeDepartmentId === dept.id
+                          ? "text-white"
+                          : "bg-sf-cream dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                      )}
+                      style={activeDepartmentId === dept.id ? { backgroundColor: dept.color } : undefined}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dept.color }} />
+                      {dept.name}
+                    </button>
+                  ))}
                 </div>
-              </div>
-              {activeDoc && (
-                <p className="text-[11px] text-slate-400 mt-1.5 truncate px-1">Reading: {activeDoc.title}</p>
               )}
+
+              <div className="flex gap-2 px-3 pb-2.5 overflow-x-auto scrollbar-none">
+                {documents
+                  .filter((doc) => !activeDepartmentId || doc.departmentId === activeDepartmentId)
+                  .map((doc) => {
+                    const totalSec = doc.sections.length;
+                    let readSec = 0;
+                    doc.sections.forEach((s) => { if (tracking[s.id]) readSec++; });
+                    const pct = totalSec > 0 ? Math.round((readSec / totalSec) * 100) : 0;
+                    const isActive = activeDocId === doc.id && !viewingOverallAnalytics && !viewingDueDates;
+
+                    return (
+                      <button
+                        key={doc.id}
+                        onClick={() => handleSelectDoc(doc.id)}
+                        className={cn(
+                          "w-40 shrink-0 rounded-xl border px-3 py-2 text-left transition-all",
+                          isActive
+                            ? "bg-sf-brown text-white border-sf-brown shadow-sm"
+                            : "bg-white dark:bg-slate-800 border-sf-cream-dark dark:border-slate-700 hover:border-sf-gold/40"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: departments.find((d) => d.id === doc.departmentId)?.color || "#999" }}
+                          />
+                          <span className={cn("flex-1 truncate text-xs font-semibold", isActive ? "text-white" : "text-slate-900 dark:text-slate-100")}>
+                            {doc.title}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className={cn("flex-1 h-1 rounded-full overflow-hidden", isActive ? "bg-white/20" : "bg-sf-cream-dark dark:bg-slate-700")}>
+                            <div className="h-1 rounded-full bg-sf-gold" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className={cn("text-[10px] font-medium tabular-nums shrink-0", isActive ? "text-sf-gold-light" : "text-slate-400")}>
+                            {pct}%
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                {documents.filter((doc) => !activeDepartmentId || doc.departmentId === activeDepartmentId).length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-3 w-full">No manuals in this department.</p>
+                )}
+              </div>
             </div>
 
             {/* Desktop: Department Tabs */}
