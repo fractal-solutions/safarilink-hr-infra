@@ -25,26 +25,18 @@ export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, o
   };
 
   return (
-    <header className="bg-sf-brown dark:bg-slate-900 text-white shadow-lg px-4 sm:px-6 py-3 sm:py-3.5 flex justify-between items-center shrink-0 relative z-40">
+    <header className="bg-sf-brown text-white shadow-lg px-4 sm:px-6 py-3 sm:py-3.5 flex justify-between items-center shrink-0 relative z-40">
       {/* Logo */}
-      <div className="flex items-center space-x-3">
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden flex items-center justify-center bg-sf-brown border border-sf-gold/20 shrink-0 shadow-sm">
-          <svg viewBox="0 0 200 200" className="w-full h-full">
-            <rect width="200" height="200" rx="32" fill="#5C3A1E"/>
-            <path d="M100 95 C90 85, 65 70, 30 60 C40 65, 55 72, 65 80 C50 75, 35 68, 18 62 C30 70, 50 80, 68 88 C55 84, 40 78, 25 74 C40 82, 58 90, 72 96 C62 93, 48 88, 35 84 C48 90, 62 96, 75 102 C68 100, 58 96, 50 92 C60 97, 72 102, 82 106 C78 105, 70 102, 64 99 C72 103, 82 108, 90 112 L95 108 Z" fill="#C8A951"/>
-            <path d="M100 95 C110 85, 135 70, 170 60 C160 65, 145 72, 135 80 C150 75, 165 68, 182 62 C170 70, 150 80, 132 88 C145 84, 160 78, 175 74 C160 82, 142 90, 128 96 C138 93, 152 88, 165 84 C152 90, 138 96, 125 102 C132 100, 142 96, 150 92 C140 97, 128 102, 118 106 C122 105, 130 102, 136 99 C128 103, 118 108, 110 112 L105 108 Z" fill="#C8A951"/>
-            <ellipse cx="100" cy="110" rx="12" ry="22" fill="#C8A951"/>
-            <circle cx="100" cy="85" r="10" fill="#C8A951"/>
-            <path d="M108 83 L118 85 L108 87 Z" fill="#5C3A1E"/>
-            <circle cx="103" cy="83" r="2" fill="#5C3A1E"/>
-            <path d="M92 130 L85 155 L95 140 Z" fill="#C8A951"/>
-            <path d="M100 132 L100 160 L105 140 Z" fill="#C8A951"/>
-            <path d="M108 130 L115 155 L105 140 Z" fill="#C8A951"/>
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-lg sm:text-xl font-bold tracking-wide" style={{ fontFamily: "'Playfair Display', serif" }}>Safarilink</h1>
-          <p className="text-[10px] sm:text-xs text-sf-gold-light/80">HR Compliance & Policy Portal</p>
+      <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+        <img
+          src="/assets/12.png"
+          alt="Safarilink"
+          className="h-14 sm:h-[4.5rem] w-auto object-contain"
+          draggable={false}
+        />
+        <div className="hidden xs:flex flex-col border-l border-white/15 pl-2.5 sm:pl-3 leading-tight">
+          <span className="text-[10px] sm:text-xs font-semibold text-sf-gold-light/90 tracking-wide">HR Compliance</span>
+          <span className="text-[10px] sm:text-xs text-sf-gold-light/70">&amp; Policy Portal</span>
         </div>
       </div>
 
@@ -140,7 +132,7 @@ export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, o
 
       {/* Mobile Menu */}
       {showMobileMenu && (
-        <div className="absolute top-full left-0 right-0 bg-sf-brown dark:bg-slate-900 border-t border-white/10 p-4 space-y-3 md:hidden shadow-2xl z-50">
+        <div className="absolute top-full left-0 right-0 bg-sf-brown border-t border-white/10 p-4 space-y-3 md:hidden shadow-2xl z-50">
           {/* View Toggle */}
           <div className="flex gap-1 bg-white/5 rounded-xl p-1">
             <button

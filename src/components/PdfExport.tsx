@@ -34,6 +34,10 @@ export function PdfExport({ document: doc }: PdfExportProps) {
           .content { font-size: 0.9rem; }
           .content p { margin: 0.5em 0; }
           .content strong { font-weight: 700; }
+          .content ul { list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0; }
+          .content ol { list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+          .content li { margin: 0.25em 0; }
+          .content mark { background-color: #fef08a; border-radius: 0.15em; padding: 0.1em 0.2em; }
           .meta { font-size: 0.75rem; color: #94a3b8; margin-top: 2rem; }
         </style>
       </head>

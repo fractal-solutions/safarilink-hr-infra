@@ -9,6 +9,8 @@ if (!existsSync(UPLOADS_DIR)) {
   mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+const ASSETS_DIR = join(import.meta.dir, "..", "assets");
+
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -1332,6 +1334,37 @@ const server = serve({
           };
         });
         return json(result);
+      },
+    },
+
+    // ─── Static Assets ────────────────────────────────────────
+
+    "/assets/:filename": {
+      async GET(req) {
+        const { filename } = req.params;
+        if (filename.includes("..") || filename.includes("/")) {
+          return notFound();
+        }
+        const filePath = join(ASSETS_DIR, filename);
+        if (!existsSync(filePath)) {
+          return notFound();
+        }
+        const data = readFileSync(filePath);
+        const ext = extname(filename).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".png": "image/png",
+          ".gif": "image/gif",
+          ".webp": "image/webp",
+          ".svg": "image/svg+xml",
+        };
+        return new Response(data, {
+          headers: {
+            "Content-Type": mimeTypes[ext] || "application/octet-stream",
+            "Cache-Control": "public, max-age=86400",
+          },
+        });
       },
     },
 
