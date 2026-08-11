@@ -423,8 +423,9 @@ function BentoCard({ announcement: ann, isAdmin, onClick, onEdit, onDelete, dele
   const isSmall = !isMultiRow && !isHero;
   const isTruncated = isSmall && ann.content && ann.content.length > 120;
 
-  // Responsive image heights: mobile first, then sm breakpoint
-  const imageHeightClass = isTall4 ? "h-40 sm:h-56" : isTall3 ? "h-36 sm:h-44" : isHero ? "h-32 sm:h-40" : isMultiRow ? "h-28 sm:h-36" : "h-24 sm:h-28";
+  // Responsive image minimum heights: the image grows (flex-1) to fill extra card height,
+  // min-height guarantees a reasonable floor so images never collapse to a sliver.
+  const imageHeightClass = isTall4 ? "min-h-40 sm:min-h-52" : isTall3 ? "min-h-32 sm:min-h-44" : isHero ? "min-h-28 sm:min-h-40" : isMultiRow ? "min-h-24 sm:min-h-32" : "min-h-14 sm:min-h-16";
 
   return (
     <div
@@ -438,15 +439,15 @@ function BentoCard({ announcement: ann, isAdmin, onClick, onEdit, onDelete, dele
       onClick={onClick}
       className={cn("rounded-2xl border overflow-hidden transition-all duration-200 relative group flex flex-col cursor-pointer bg-white dark:bg-slate-800 hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5 hover:border-sf-gold/40", config.border, GRID_SIZE_CLASSES[gridSize], isDragging && "opacity-40 scale-95", isDropTarget && "ring-2 ring-sf-gold/50 border-sf-gold border-dashed bg-sf-cream/30")}
     >
-      {/* Image */}
+      {/* Image — grows (flex-1) to fill extra vertical space on taller cards */}
       {hasImage && (
-        <div className={cn("w-full overflow-hidden relative shrink-0", imageHeightClass)}>
+        <div className={cn("w-full overflow-hidden relative flex-1 min-h-0", imageHeightClass)}>
           <img src={ann.imageUrl!} alt={ann.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
         </div>
       )}
 
-      <div className={cn("flex-1 p-4 min-h-0", !hasImage && config.bg)}>
+      <div className={cn("p-4 min-h-0", hasImage ? "shrink-0" : "flex-1", !hasImage && config.bg)}>
         <div className="flex items-start gap-3 h-full">
           {ann.emoji && !hasImage && (
             <span className="text-2xl shrink-0 leading-none">{ann.emoji}</span>
