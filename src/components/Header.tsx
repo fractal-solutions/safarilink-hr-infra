@@ -25,7 +25,7 @@ export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, o
   };
 
   return (
-    <header className="bg-sf-brown text-white shadow-lg px-4 sm:px-6 py-3 sm:py-3.5 flex justify-between items-center shrink-0 relative z-40">
+    <header className="bg-sf-brown text-white shadow-lg px-4 sm:px-6 py-1 sm:py-1.5 flex justify-between items-center shrink-0 relative z-40">
       {/* Logo */}
       <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
         <img
