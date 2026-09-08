@@ -19,8 +19,9 @@ import { DueDateDashboard } from "@/components/DueDateDashboard";
 import { VersionHistory } from "@/components/VersionHistory";
 import { ImportExport } from "@/components/ImportExport";
 import { BulletinBoard } from "@/components/BulletinBoard";
+import { Tip } from "@/components/Tip";
 import { applyTheme } from "@/themes";
-import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X, Trash2, RotateCcw, Search } from "lucide-react";
+import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X, Trash2, RotateCcw, Search, ChevronRight } from "lucide-react";
 
 function AppInner() {
   const { toast } = useToast();
@@ -544,122 +545,154 @@ function AppInner() {
               </div>
             </div>
 
-            {/* Desktop: Department Tabs */}
-            {departments.length > 0 && (
-              <div className="hidden sm:block bg-white dark:bg-slate-900 border-b border-sf-cream-dark dark:border-slate-700 px-6 shrink-0">
-                <div className="flex gap-0 overflow-x-auto h-12 items-end scrollbar-none">
-                  <button
-                    onClick={() => { setActiveDepartmentId(null); setActiveDocId(null); }}
-                    className={cn(
-                      "px-5 h-10 rounded-t-lg text-sm font-semibold transition-all whitespace-nowrap border-b-2 flex items-center gap-2 min-w-[120px] justify-center",
-                      activeDepartmentId === null
-                        ? "bg-sf-cream dark:bg-slate-800 text-sf-brown dark:text-sf-gold border-sf-gold"
-                        : "text-slate-400 dark:text-slate-500 border-transparent hover:text-slate-600 dark:hover:text-slate-300 hover:border-slate-300"
-                    )}
-                  >
-                    All Departments
-                  </button>
-                  {departments.map((dept) => (
-                    <button
-                      key={dept.id}
-                      onClick={() => { setActiveDepartmentId(dept.id); setActiveDocId(null); }}
-                      className={cn(
-                        "px-5 h-10 rounded-t-lg text-sm font-semibold transition-all whitespace-nowrap border-b-2 flex items-center gap-2 min-w-[120px] justify-center",
-                        activeDepartmentId === dept.id
-                          ? "bg-sf-cream dark:bg-slate-800 border-sf-gold"
-                          : "text-slate-400 dark:text-slate-500 border-transparent hover:text-slate-600 dark:hover:text-slate-300 hover:border-slate-300"
-                      )}
-                      style={activeDepartmentId === dept.id ? { color: dept.color } : undefined}
+            {/* Content chrome: hierarchy of breadcrumb → document header → actions */}
+            <div className="shrink-0 bg-white dark:bg-slate-900 border-b border-sf-cream-dark dark:border-slate-700">
+              {/* Mini strip: dept context (left) + view mode toggles (admin, right) */}
+              <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-2 border-b border-sf-cream-dark dark:border-slate-700/60 bg-sf-cream/50 dark:bg-slate-900">
+                <div className="flex items-center gap-1.5 min-w-0 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  <BookOpen className="w-3.5 h-3.5 text-sf-gold shrink-0" />
+                  <span className="hidden sm:inline">Policy Manuals</span>
+                  <ChevronRight className="w-3 h-3 shrink-0" />
+                  <span className="inline-flex items-center gap-1.5 min-w-0 normal-case text-slate-600 dark:text-slate-300 font-bold truncate">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: departments.find((d) => d.id === activeDepartmentId)?.color || "#94a3b8" }}
+                    />
+                    {departments.find((d) => d.id === activeDepartmentId)?.name ?? "All Manuals"}
+                  </span>
+                </div>
+
+                {isAdmin && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Tip
+                      align="right"
+                      label="Due Dates"
+                      description="Shows compliance deadlines for every manual — which are approaching and which are already overdue."
                     >
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dept.color }} />
-                      {dept.name}
-                    </button>
-                  ))}
-                </div>
+                      <button
+                        onClick={() => { setViewingDueDates((v) => !v); setViewingOverallAnalytics(false); setViewingReports(false); setViewingTrash(false); }}
+                        className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full border text-[11px] sm:text-xs font-semibold transition-colors ${viewingDueDates ? "bg-sf-gold text-sf-brown border-sf-gold" : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-sf-gold/40"}`}
+                      >
+                        <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> <span className="hidden xs:inline">{viewingDueDates ? "Due Dates On" : "Due Dates"}</span>
+                      </button>
+                    </Tip>
+                    <Tip
+                      align="right"
+                      label={viewingOverallAnalytics ? "Back to Manuals" : "Analytics"}
+                      description="Switches to overall readership analytics across every manual and user — completion trends, read counts and staff coverage."
+                    >
+                      <button
+                        onClick={() => { setViewingOverallAnalytics((v) => !v); setViewingReports(false); setViewingDueDates(false); setViewingTrash(false); }}
+                        className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full border text-[11px] sm:text-xs font-semibold transition-colors ${viewingOverallAnalytics ? "bg-sf-brown text-white border-sf-brown" : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-sf-gold/40"}`}
+                      >
+                        <BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> <span className="hidden xs:inline">{viewingOverallAnalytics ? "Analytics On" : "Analytics"}</span>
+                      </button>
+                    </Tip>
+                    <Tip
+                      align="right"
+                      label={viewingTrash ? "Close Trash" : "Trash"}
+                      description="Browse manuals that were moved to trash and restore them — nothing is permanently deleted from here."
+                    >
+                      <button
+                        onClick={() => { setViewingTrash((v) => !v); setViewingOverallAnalytics(false); setViewingReports(false); setViewingDueDates(false); if (!viewingTrash) loadTrash(); }}
+                        className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full border text-[11px] sm:text-xs font-semibold transition-colors ${viewingTrash ? "bg-red-600 text-white border-red-600" : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-red-300"}`}
+                      >
+                        <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> <span className="hidden xs:inline">{viewingTrash ? "Trash Open" : "Trash"}</span>
+                      </button>
+                    </Tip>
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* Admin toolbar */}
-            {isAdmin && (
-              <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2.5 sm:py-3 bg-sf-cream dark:bg-slate-900 border-b border-sf-cream-dark dark:border-slate-700 shrink-0 overflow-x-auto scrollbar-none">
-                <ImportExport onImportComplete={loadDocs} />
-                <button
-                  onClick={() => setShowNewDoc(true)}
-                  className="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium bg-sf-brown hover:bg-sf-brown-dark text-white rounded-lg transition-colors flex items-center gap-1.5 shrink-0"
-                >
-                  <ListPlus className="w-3.5 h-3.5" /> <span className="hidden xs:inline">New</span> Manual
-                </button>
-                <div className="flex items-center gap-1 sm:gap-1.5 ml-auto shrink-0">
-                  <button
-                    onClick={() => { setViewingDueDates((v) => !v); setViewingOverallAnalytics(false); setViewingReports(false); setViewingTrash(false); }}
-                    className={`px-2 sm:px-3 py-1.5 rounded-lg border text-[11px] sm:text-xs font-medium transition-colors flex items-center gap-1 ${viewingDueDates ? "bg-sf-gold text-sf-brown border-sf-gold" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"}`}
-                  >
-                    <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Due Dates</span><span className="sm:hidden">Dates</span>
-                  </button>
-                  <button
-                    onClick={() => { setViewingOverallAnalytics((v) => !v); setViewingReports(false); setViewingDueDates(false); setViewingTrash(false); }}
-                    className={`px-2 sm:px-3 py-1.5 rounded-lg border text-[11px] sm:text-xs font-medium transition-colors flex items-center gap-1 ${viewingOverallAnalytics ? "bg-sf-brown text-white border-sf-brown" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"}`}
-                  >
-                    <BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">{viewingOverallAnalytics ? "Exit" : "Analytics"}</span><span className="sm:hidden">{viewingOverallAnalytics ? "Exit" : "Stats"}</span>
-                  </button>
-                  <button
-                    onClick={() => { setViewingTrash((v) => !v); setViewingOverallAnalytics(false); setViewingReports(false); setViewingDueDates(false); if (!viewingTrash) loadTrash(); }}
-                    className={`px-2 sm:px-3 py-1.5 rounded-lg border text-[11px] sm:text-xs font-medium transition-colors flex items-center gap-1 ${viewingTrash ? "bg-red-600 text-white border-red-600" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"}`}
-                  >
-                    <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">{viewingTrash ? "Close" : "Trash"}</span><span className="sm:hidden">{viewingTrash ? "X" : "Trash"}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Content area */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <div className="border-b border-sf-cream-dark dark:border-slate-700 p-4 sm:p-5 flex justify-between items-center bg-sf-cream dark:bg-slate-800 shrink-0 gap-3">
+              {/* Document header: title + meta (left) & primary document actions (right) */}
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3">
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-base sm:text-xl font-bold text-slate-900 dark:text-slate-100 truncate">
+                  <h1 className="text-lg sm:text-2xl font-bold text-slate-900 dark:text-slate-100 leading-tight truncate">
                     {viewingDueDates
                       ? "Due Dates"
                       : viewingOverallAnalytics
                         ? "Analytics"
-                        : activeDoc?.title ?? "Select a document"}
-                  </h2>
+                        : viewingTrash
+                          ? "Trash"
+                          : activeDoc?.title ?? (isAdmin ? "Start building your library" : "Choose a manual to begin reading")}
+                  </h1>
                   <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                     {viewingDueDates
-                      ? "Compliance deadlines."
+                      ? "Compliance deadlines across all manuals."
                       : viewingOverallAnalytics
-                        ? "Across all manuals and users."
-                        : docMetaText}
+                        ? "Readership across all manuals and users."
+                        : viewingTrash
+                          ? "Soft-deleted manuals can be restored here."
+                          : docMetaText}
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5 sm:space-x-2 shrink-0">
-                  {isAdmin && !viewingOverallAnalytics && !viewingDueDates && activeDoc && (
+
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0">
+                  {isAdmin && !viewingDueDates && !viewingOverallAnalytics && !viewingTrash && (
                     <>
-                      <button
-                        onClick={() => setShowNewSection(true)}
-                        className="bg-sf-brown hover:bg-sf-brown-dark text-white px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors flex items-center gap-1 shadow-xs"
+                      <Tip
+                        align="right"
+                        label="Import / Export"
+                        description="Bulk import manuals, departments and users from a JSON backup, or export the current data to take off-site."
                       >
-                        <ListPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Add Section</span><span className="sm:hidden">Add</span>
-                      </button>
-                      <button
-                        onClick={() => setViewingReports((v) => !v)}
-                        className={`px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg font-medium border transition-colors flex items-center gap-1 ${
-                          viewingReports
-                            ? "bg-sf-gold text-sf-brown border-sf-gold"
-                            : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-                        }`}
+                        <ImportExport onImportComplete={loadDocs} />
+                      </Tip>
+                      <Tip
+                        align="right"
+                        label="New Manual"
+                        description="Create a brand-new policy manual. Give it a title, due date and department — sections can be added afterwards."
                       >
-                        {viewingReports ? (
-                          <><BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Reader</span></>
-                        ) : (
-                          <><BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Report</span></>
-                        )}
-                      </button>
+                        <button
+                          onClick={() => setShowNewDoc(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold bg-sf-brown hover:bg-sf-brown-dark text-white rounded-lg transition-colors shadow-xs shrink-0"
+                        >
+                          <ListPlus className="w-3.5 h-3.5" /> <span className="hidden xs:inline">New</span> Manual
+                        </button>
+                      </Tip>
+                    </>
+                  )}
+                  {isAdmin && !viewingDueDates && !viewingOverallAnalytics && !viewingTrash && activeDoc && (
+                    <>
+                      <span className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+                      <Tip
+                        align="right"
+                        label={viewingReports ? "Back to Reader" : "Manual Report"}
+                        description="Opens a per-manual report showing which sections each staff member has read, marked complete and their overall completion rate."
+                      >
+                        <button
+                          onClick={() => setViewingReports((v) => !v)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg border font-medium transition-colors shrink-0 ${
+                            viewingReports
+                              ? "bg-sf-gold text-sf-brown border-sf-gold"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-sf-gold/50"
+                          }`}
+                        >
+                          {viewingReports ? (
+                            <><BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden xs:inline">Reader</span></>
+                          ) : (
+                            <><BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden xs:inline">Report</span></>
+                          )}
+                        </button>
+                      </Tip>
+                      <Tip
+                        align="right"
+                        label="Add Section"
+                        description="Attach a new block to this manual — rich text, a training video, an embedded PDF, or a PowerPoint slide deck."
+                      >
+                        <button
+                          onClick={() => setShowNewSection(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold bg-sf-brown hover:bg-sf-brown-dark text-white rounded-lg transition-colors shadow-xs shrink-0"
+                        >
+                          <ListPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden xs:inline">Add Section</span><span className="xs:hidden">Add</span>
+                        </button>
+                      </Tip>
                     </>
                   )}
                 </div>
               </div>
+            </div>
 
-              <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
+            <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
                 {viewingTrash ? (
                   <div className="space-y-4">
                     <h3 className="text-lg font-bold text-sf-brown flex items-center gap-2">
@@ -707,7 +740,6 @@ function AppInner() {
                   />
                 )}
               </div>
-            </div>
           </section>
         </main>
       )}

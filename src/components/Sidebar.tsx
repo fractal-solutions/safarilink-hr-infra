@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { BookOpen, ChevronRight, Plus, GripVertical, Calendar, Archive, X, Tag, Trash2, Pencil, Building2 } from "lucide-react";
 import type { PolicyDocument, UserRole, Department } from "@/types";
 import { cn } from "@/lib/utils";
+import { Tip } from "./Tip";
 
 interface SidebarProps {
   documents: PolicyDocument[];
@@ -104,6 +105,10 @@ export function Sidebar({
       ? documents.filter((doc) => doc.departmentId === activeDepartmentId)
       : documents;
 
+  const activeDeptName = activeDepartmentId
+    ? departments.find((d) => d.id === activeDepartmentId)?.name ?? "this department"
+    : null;
+
   const startEditDueDate = (docId: string, currentDate: string | null) => {
     setEditingDueDate(docId);
     setDueDateValue(currentDate ? currentDate.slice(0, 10) : "");
@@ -130,22 +135,86 @@ export function Sidebar({
             </button>
           )}
           {currentRole === "admin" && (
-            <button
-              onClick={onCreateDoc}
-              className="bg-sf-cream hover:bg-sf-cream-dark dark:bg-sf-brown/30 dark:hover:bg-sf-brown/50 text-sf-brown dark:text-sf-gold p-1.5 rounded-xl border border-sf-cream-dark dark:border-sf-brown-light/30 transition-all hover:shadow-sm"
-              title="Create New Document"
+            <Tip
+              align="left"
+              label="New Manual"
+              description="Create a new policy manual for the selected department. You can add sections once it's created."
             >
-              <Plus className="w-4 h-4" />
-            </button>
+              <button
+                onClick={onCreateDoc}
+                className="bg-sf-cream hover:bg-sf-cream-dark dark:bg-sf-brown/30 dark:hover:bg-sf-brown/50 text-sf-brown dark:text-sf-gold p-1.5 rounded-xl border border-sf-cream-dark dark:border-sf-brown-light/30 transition-all hover:shadow-sm"
+                aria-label="Create New Manual"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </Tip>
           )}
         </div>
       </div>
+
+      {/* Department scope — choose which manuals the panel lists */}
+      {departments.length > 0 && (
+        <div className="pb-3 mb-3 border-b border-sf-cream-dark dark:border-slate-700/50">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+            Department
+          </p>
+          <div className="flex flex-wrap gap-1">
+            <button
+              onClick={() => onSelectDepartment?.(null)}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold border transition-all",
+                activeDepartmentId === null
+                  ? "bg-sf-brown text-white border-sf-brown shadow-sm"
+                  : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-sf-cream-dark dark:border-slate-700 hover:border-sf-gold/40 hover:text-sf-brown dark:hover:text-slate-200"
+              )}
+            >
+              <Building2 className="w-3 h-3" />
+              All
+            </button>
+            {departments.map((dept) => {
+              const active = activeDepartmentId === dept.id;
+              return (
+                <button
+                  key={dept.id}
+                  onClick={() => onSelectDepartment?.(dept.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold border transition-all",
+                    active
+                      ? "text-white border-transparent shadow-sm"
+                      : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-sf-cream-dark dark:border-slate-700 hover:border-sf-gold/40 hover:text-slate-700 dark:hover:text-slate-200"
+                  )}
+                  style={active ? { backgroundColor: dept.color } : undefined}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: active ? "#fff" : dept.color }} />
+                  {dept.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-1.5 overflow-y-auto flex-1 min-h-0 scrollbar-none">
         {filteredDocs.length === 0 && searchQuery.trim() && (
           <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">
             No results for "{searchQuery}"
           </p>
+        )}
+        {filteredDocs.length === 0 && !searchQuery.trim() && (
+          <div className="text-center py-8 px-2">
+            <BookOpen className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              No manuals{activeDeptName ? ` in ${activeDeptName}` : ""} yet
+            </p>
+            {currentRole === "admin" && (
+              <button
+                onClick={onCreateDoc}
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sf-brown hover:bg-sf-brown-dark text-white text-[11px] font-semibold transition-colors shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" /> Create manual
+              </button>
+            )}
+          </div>
         )}
         {filteredDocs.map((doc, index) => {
           const totalSec = doc.sections.length;
