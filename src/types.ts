@@ -8,6 +8,7 @@ export interface User {
   role: "admin" | "user";
   theme: string;
   createdAt: string;
+  sessionTimeoutMinutes?: number | null;
 }
 
 export type SectionType = "richtext" | "video" | "pdf" | "slides";
@@ -79,6 +80,45 @@ export interface Announcement {
   authorName: string | null;
   createdAt: string;
   updatedAt: string;
+  likeCount?: number;
+  commentCount?: number;
+  viewCount?: number;
+  likedByMe?: boolean;
+}
+
+export interface AnnouncementComment {
+  id: string;
+  body: string;
+  userId: string;
+  authorName: string;
+  authorRole?: string;
+  createdAt: string;
+  likeCount?: number;
+  likedByMe?: boolean;
+  rank?: number;
+}
+
+export interface AnnouncementThread extends AnnouncementComment {
+  replies: AnnouncementComment[];
+}
+
+export interface AnnouncementViewer {
+  userId: string;
+  name: string;
+  firstViewedAt: string;
+  lastViewedAt: string;
+}
+
+export interface AnnouncementDetail extends Announcement {
+  comments: AnnouncementThread[];
+  viewers: AnnouncementViewer[] | null;
+}
+
+export interface SessionSettings {
+  ownMinutes: number | null;
+  capSeconds: number | null;
+  defaultSeconds: number;
+  effectiveSeconds: number;
 }
 
 export interface Banner {

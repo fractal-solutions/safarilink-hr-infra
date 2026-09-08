@@ -21,13 +21,18 @@ import {
   Send,
   Upload,
   LinkIcon,
+  ThumbsUp,
+  MessageCircle,
+  Eye,
+  Reply,
 } from "lucide-react";
-import type { Announcement, Banner, Department, PolicyDocument } from "@/types";
+import type { Announcement, Banner, Department, PolicyDocument, AnnouncementDetail, AnnouncementThread } from "@/types";
 import * as api from "@/api";
 import { cn } from "@/lib/utils";
 
 interface BulletinBoardProps {
   isAdmin: boolean;
+  activeUserId: string;
   departments: Department[];
   documents: PolicyDocument[];
   onSelectDepartment: (deptId: string) => void;
@@ -149,7 +154,7 @@ function GridSizePicker({ value, onChange }: { value: string; onChange: (v: stri
   );
 }
 
-export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartment, onSelectDoc }: BulletinBoardProps) {
+export function BulletinBoard({ isAdmin, activeUserId, departments, documents, onSelectDepartment, onSelectDoc }: BulletinBoardProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,8 +170,8 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
 
   useEffect(() => { loadData(); }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     const [anns, banrs] = await Promise.all([api.getAnnouncements(), api.getBanners()]);
     setAnnouncements(anns);
     setBanners(banrs);
@@ -377,8 +382,10 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
         <AnnouncementDetailModal
           announcement={selectedAnnouncement}
           isAdmin={isAdmin}
+          activeUserId={activeUserId}
           onClose={() => setSelectedAnnouncement(null)}
           onEdit={() => { setSelectedAnnouncement(null); setEditingAnnouncement(selectedAnnouncement); setShowAnnouncementEditor(true); }}
+          onChanged={() => loadData(true)}
         />
       )}
       {showAnnouncementEditor && (
@@ -393,17 +400,253 @@ export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartm
 
 // ─── Announcement Detail Modal ──────────────────────────────────
 
-function AnnouncementDetailModal({ announcement: ann, isAdmin, onClose, onEdit }: {
-  announcement: Announcement; isAdmin: boolean; onClose: () => void; onEdit: () => void;
+function timeAgo(iso: string): string {
+  const s = Math.floor((Date.now() - Date.parse(iso)) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return d < 7 ? `${d}d ago` : new Date(iso).toLocaleDateString();
+}
+
+function AnnouncementDetailModal({ announcement, isAdmin, activeUserId, onClose, onEdit, onChanged }: {
+  announcement: Announcement;
+  isAdmin: boolean;
+  activeUserId: string;
+  onClose: () => void;
+  onEdit: () => void;
+  onChanged?: () => void;
 }) {
-  const config = TYPE_CONFIG[ann.type] || TYPE_CONFIG.info;
+  const [detail, setDetail] = useState<AnnouncementDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [liking, setLiking] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [showViewers, setShowViewers] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const config = TYPE_CONFIG[announcement.type] || TYPE_CONFIG.info;
   const Icon = config.icon;
+  const comments = detail?.comments ?? [];
+  const commentTotal = comments.reduce((acc, t) => acc + 1 + t.replies.length, 0);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.getAnnouncementDetail(announcement.id).then((d) => {
+      if (!mounted) return;
+      setDetail(d);
+      setLoading(false);
+      onChanged?.();
+    });
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [announcement.id]);
+
+  const toggleLike = async () => {
+    if (!detail || liking) return;
+    setLiking(true);
+    const prev = detail.likedByMe;
+    setDetail({ ...detail, likedByMe: !prev, likeCount: Math.max(0, (detail.likeCount ?? 0) + (prev ? -1 : 1)) });
+    const res = await api.toggleAnnouncementLike(detail.id);
+    if (res) setDetail((p) => (p ? { ...p, likedByMe: res.liked, likeCount: res.count } : p));
+    setLiking(false);
+    onChanged?.();
+  };
+
+  const submitComment = async () => {
+    const text = commentText.trim();
+    if (!text || !detail || submitting) return;
+    setSubmitting(true);
+    const c = await api.addAnnouncementComment(detail.id, text);
+    if (c) {
+      setDetail((p) => (p ? { ...p, comments: [...p.comments, { ...c, replies: [] } as AnnouncementThread] } : p));
+      setCommentText("");
+      onChanged?.();
+    }
+    setSubmitting(false);
+  };
+
+  const submitReply = async (threadId: string) => {
+    const text = replyText.trim();
+    if (!text || !detail || submitting) return;
+    setSubmitting(true);
+    const c = await api.addAnnouncementComment(detail.id, text, threadId);
+    if (c) {
+      setDetail((p) => p ? {
+        ...p,
+        comments: p.comments.map((t) => t.id === threadId ? { ...t, replies: [...t.replies, c] } : t),
+      } : p);
+      setReplyToId(null);
+      setReplyText("");
+      onChanged?.();
+    }
+    setSubmitting(false);
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (deletingId) return;
+    setDeletingId(commentId);
+    const ok = await api.deleteAnnouncementComment(commentId);
+    if (ok) {
+      setDetail((p) => p ? {
+        ...p,
+        comments: p.comments
+          .filter((t) => t.id !== commentId)
+          .map((t) => ({ ...t, replies: t.replies.filter((r) => r.id !== commentId) })),
+      } : p);
+      onChanged?.();
+    }
+    setDeletingId(null);
+  };
+
+  const canManage = (userId: string) => isAdmin || userId === activeUserId;
+
+  const sortByPop = (list: any[]) =>
+    [...list].sort((a, b) => ((b.likeCount ?? 0) - (a.likeCount ?? 0)) || (a.createdAt < b.createdAt ? -1 : 1));
+
+  const applyCommentLike = async (commentId: string) => {
+    const res = await api.toggleCommentLike(commentId);
+    if (!res || !detail) return;
+    setDetail((prev) => {
+      if (!prev) return prev;
+      const updateThread = (t: AnnouncementThread): AnnouncementThread => {
+        const head = t.id === commentId ? { ...t, likedByMe: res.liked, likeCount: res.count } : t;
+        const replies = t.replies.map((r) =>
+          r.id === commentId ? { ...r, likedByMe: res.liked, likeCount: res.count } : r
+        );
+        return { ...head, replies: sortByPop(replies) };
+      };
+      const comments = sortByPop(prev.comments.map(updateThread));
+      comments.forEach((t, i) => {
+        t.rank = i + 1;
+        t.replies.forEach((r, j) => { r.rank = j + 1; });
+      });
+      return { ...prev, comments };
+    });
+  };
+
+  const renderCommentActions = ({ id, userId, isThread, likeCount = 0, likedByMe = false }: {
+    id: string; userId: string; isThread: boolean; likeCount?: number; likedByMe?: boolean;
+  }) => (
+    <div className="flex items-center gap-2.5">
+      <button
+        onClick={() => applyCommentLike(id)}
+        className={cn(
+          "inline-flex items-center gap-1 text-[11px] font-medium transition-colors",
+          likedByMe ? "text-sf-brown dark:text-sf-gold" : "text-slate-400 hover:text-sf-brown dark:hover:text-sf-gold"
+        )}
+      >
+        <ThumbsUp className={cn("w-3 h-3", likedByMe && "fill-current")} />
+        {likeCount > 0 && <span className="tabular-nums">{likeCount}</span>}
+      </button>
+      {isThread && (
+        <button
+          onClick={() => setReplyToId(replyToId === id ? null : id)}
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-sf-brown dark:hover:text-sf-gold transition-colors"
+        >
+          <Reply className="w-3 h-3" /> Reply
+        </button>
+      )}
+      {canManage(userId) && (
+        <button
+          onClick={() => handleDeleteComment(id)}
+          disabled={deletingId === id}
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
+        >
+          <Trash2 className="w-3 h-3" /> Delete
+        </button>
+      )}
+    </div>
+  );
+
+  const renderComment = (c: AnnouncementThread) => (
+    <div key={c.id} className="rounded-xl border border-sf-cream-dark dark:border-slate-600 p-3">
+      <div className="flex items-start gap-2.5">
+        <div className="w-7 h-7 rounded-full bg-sf-cream dark:bg-slate-600 text-sf-brown dark:text-slate-200 flex items-center justify-center font-bold text-xs shrink-0">
+          {c.authorName.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{c.authorName}</span>
+            {c.authorRole === "admin" && (
+              <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-sf-gold/15 text-sf-brown-dark dark:text-sf-gold">Admin</span>
+            )}
+            {!!c.rank && (
+              <span className={cn(
+                "text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+                c.rank === 1 ? "bg-sf-gold text-sf-brown" : "bg-sf-cream dark:bg-slate-600 text-slate-400 dark:text-slate-300"
+              )}>
+                {c.rank === 1 ? "Top comment" : `#${c.rank}`}
+              </span>
+            )}
+            <span className="text-[10px] text-slate-400">{timeAgo(c.createdAt)}</span>
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5 whitespace-pre-wrap">{c.body}</p>
+          <div className="mt-1.5">{renderCommentActions({ id: c.id, userId: c.userId, isThread: true, likeCount: c.likeCount, likedByMe: c.likedByMe })}</div>
+        </div>
+      </div>
+
+      {replyToId === c.id && (
+        <div className="mt-2 ml-9">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              name="reply"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submitReply(c.id); }}
+              placeholder={`Reply to ${c.authorName}…`}
+              className="flex-1 px-3 py-1.5 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-xs"
+              autoFocus
+            />
+            <button
+              onClick={() => submitReply(c.id)}
+              disabled={!replyText.trim() || submitting}
+              className="px-3 py-1.5 text-xs font-semibold bg-sf-brown hover:bg-sf-brown-dark text-white rounded-lg transition-colors disabled:opacity-40 shrink-0"
+            >
+              Reply
+            </button>
+          </div>
+        </div>
+      )}
+
+      {c.replies.length > 0 && (
+        <div className="mt-2 ml-9 space-y-2 border-l-2 border-sf-cream-dark dark:border-slate-600 pl-3">
+          {c.replies.map((r) => (
+            <div key={r.id}>
+              <div className="flex items-start gap-2.5">
+                <div className="w-6 h-6 rounded-full bg-sf-cream dark:bg-slate-600 text-sf-brown dark:text-slate-200 flex items-center justify-center font-bold text-[10px] shrink-0">
+                  {r.authorName.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{r.authorName}</span>
+                    {r.authorRole === "admin" && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-sf-gold/15 text-sf-brown-dark dark:text-sf-gold">Admin</span>
+                    )}
+                    <span className="text-[10px] text-slate-400">{timeAgo(r.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{r.body}</p>
+                  <div className="mt-1">{renderCommentActions({ id: r.id, userId: r.userId, isThread: false, likeCount: r.likeCount, likedByMe: r.likedByMe })}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-xs" onClick={onClose}>
@@ -418,7 +661,7 @@ function AnnouncementDetailModal({ announcement: ann, isAdmin, onClose, onEdit }
               <Icon className={cn("w-4 h-4", config.color)} />
             </div>
             <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", config.bg, config.color)}>{config.label}</span>
-            {ann.isPinned && <Pin className="w-3 h-3 text-sf-gold shrink-0" />}
+            {announcement.isPinned && <Pin className="w-3 h-3 text-sf-gold shrink-0" />}
           </div>
           <div className="flex items-center gap-1">
             {isAdmin && (
@@ -434,45 +677,137 @@ function AnnouncementDetailModal({ announcement: ann, isAdmin, onClose, onEdit }
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto">
-          {/* Image */}
-          {ann.imageUrl && (
+          {announcement.imageUrl && (
             <div className="w-full bg-gradient-to-b from-slate-100 to-white dark:from-slate-800 dark:to-slate-800">
-              <img src={ann.imageUrl} alt={ann.title} className="w-full max-h-[55vh] object-contain" />
+              <img src={announcement.imageUrl} alt={announcement.title} className="w-full max-h-[50vh] object-contain" />
             </div>
           )}
 
-          <div className="p-5 sm:p-6 space-y-4">
-            {/* Title + emoji */}
+          <div className="p-5 sm:p-6 pb-4 space-y-4">
             <div className="flex items-start gap-3">
-              {ann.emoji && !ann.imageUrl && (
-                <span className="text-4xl shrink-0 leading-none mt-0.5">{ann.emoji}</span>
+              {announcement.emoji && !announcement.imageUrl && (
+                <span className="text-4xl shrink-0 leading-none mt-0.5">{announcement.emoji}</span>
               )}
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{ann.title}</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{announcement.title}</h2>
             </div>
 
-            {/* Content */}
-            {ann.content && (
-              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm sm:text-base whitespace-pre-wrap">{ann.content}</p>
+            {announcement.content && (
+              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm sm:text-base whitespace-pre-wrap">{announcement.content}</p>
             )}
 
-            {/* Metadata */}
             <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap pt-2 border-t border-sf-cream-dark dark:border-slate-700">
-              {ann.departmentNames.length > 0 && (
+              {announcement.departmentNames.length > 0 ? (
                 <span className="flex items-center gap-1.5 flex-wrap">
-                  {ann.departmentNames.map((name, i) => (
+                  {announcement.departmentNames.map((name, i) => (
                     <span key={i} className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ann.departmentColors[i] || "#999" }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: announcement.departmentColors[i] || "#999" }} />
                       {name}
                     </span>
                   ))}
                 </span>
-              )}
-              {ann.departmentNames.length === 0 && (
+              ) : (
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" />All Departments</span>
               )}
-              {ann.authorName && <span>By {ann.authorName}</span>}
-              <span>{new Date(ann.createdAt).toLocaleDateString()}</span>
-              {ann.expiresAt && <span className="text-amber-500">Expires {new Date(ann.expiresAt).toLocaleDateString()}</span>}
+              {announcement.authorName && <span>By {announcement.authorName}</span>}
+              <span>{new Date(announcement.createdAt).toLocaleDateString()}</span>
+              {announcement.expiresAt && <span className="text-amber-500">Expires {new Date(announcement.expiresAt).toLocaleDateString()}</span>}
+            </div>
+
+            {/* Engagement stats bar */}
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <button
+                onClick={toggleLike}
+                disabled={!detail || liking}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all disabled:opacity-60",
+                  detail?.likedByMe
+                    ? "bg-sf-brown text-white border-sf-brown dark:bg-sf-brown-dark"
+                    : "text-slate-500 dark:text-slate-300 border-sf-cream-dark dark:border-slate-600 hover:border-sf-gold/50 hover:text-sf-brown dark:hover:text-sf-gold"
+                )}
+              >
+                <ThumbsUp className={cn("w-3.5 h-3.5", detail?.likedByMe && "fill-current")} />
+                {detail?.likeCount ?? 0} {detail?.likeCount === 1 ? "like" : "likes"}
+              </button>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 dark:text-slate-300 bg-sf-cream dark:bg-slate-700 border border-sf-cream-dark dark:border-slate-600">
+                <MessageCircle className="w-3.5 h-3.5" /> {detail ? commentTotal : (announcement.commentCount ?? 0)} comments
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 dark:text-slate-300 bg-sf-cream dark:bg-slate-700 border border-sf-cream-dark dark:border-slate-600">
+                <Eye className="w-3.5 h-3.5" /> {detail?.viewCount ?? announcement.viewCount ?? 0} {detail?.viewCount === 1 ? "view" : "views"}
+              </span>
+            </div>
+
+            {/* Admin: who viewed */}
+            {isAdmin && detail?.viewers && (
+              <div className="rounded-xl border border-sf-cream-dark dark:border-slate-600 overflow-hidden">
+                <button
+                  onClick={() => setShowViewers((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-sf-brown dark:text-slate-200 hover:bg-sf-cream dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span className="flex items-center gap-2"><Eye className="w-4 h-4 text-sf-gold" /> Who viewed this ({detail.viewers.length})</span>
+                  <ChevronRight className={cn("w-4 h-4 transition-transform", showViewers && "rotate-90")} />
+                </button>
+                {showViewers && (
+                  <div className="max-h-44 overflow-y-auto divide-y divide-sf-cream-dark dark:divide-slate-600 bg-sf-cream/40 dark:bg-slate-800/50">
+                    {detail.viewers.length === 0 ? (
+                      <p className="px-4 py-3 text-xs text-slate-400">No one has viewed this yet.</p>
+                    ) : detail.viewers.map((v) => (
+                      <div key={v.userId} className="flex items-center gap-2.5 px-4 py-2">
+                        <div className="w-7 h-7 rounded-full bg-white dark:bg-slate-600 border border-sf-cream-dark dark:border-slate-500 flex items-center justify-center font-bold text-xs text-sf-brown dark:text-slate-200 shrink-0">
+                          {v.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{v.name}</p>
+                          <p className="text-[10px] text-slate-400">Viewed {timeAgo(v.lastViewedAt)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Comments */}
+          <div className="px-5 sm:px-6 pb-6">
+            <div className="rounded-2xl border border-sf-cream-dark dark:border-slate-600 overflow-hidden">
+              <div className="px-4 py-2.5 bg-sf-cream dark:bg-slate-700 border-b border-sf-cream-dark dark:border-slate-600 flex items-center justify-between">
+                <span className="text-xs font-bold text-sf-brown dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                  <MessageCircle className="w-3.5 h-3.5 text-sf-gold" /> Discussion
+                </span>
+                <span className="text-[11px] text-slate-400">{loading ? "…" : `${commentTotal} comment${commentTotal === 1 ? "" : "s"}`}</span>
+              </div>
+
+              <div className="p-3 space-y-2 max-h-72 overflow-y-auto bg-white dark:bg-slate-800">
+                {loading ? (
+                  <p className="text-xs text-slate-400 text-center py-6">Loading discussion…</p>
+                ) : comments.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-6">Be the first to comment.</p>
+                ) : (
+                  comments.map((c) => renderComment(c))
+                )}
+              </div>
+
+              {/* Composer */}
+              <div className="px-3 py-3 border-t border-sf-cream-dark dark:border-slate-600 bg-sf-cream/40 dark:bg-slate-700/50">
+                <div className="flex items-start gap-2">
+                    <textarea
+                      name="comment"
+                      id={`comment-${announcement.id}`}
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      rows={2}
+                    placeholder="Share a comment…"
+                    className="flex-1 px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-xs resize-none"
+                  />
+                  <button
+                    onClick={submitComment}
+                    disabled={!commentText.trim() || submitting || !detail}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sf-brown hover:bg-sf-brown-dark text-white text-xs font-semibold transition-colors disabled:opacity-40 shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" /> Comment
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -559,6 +894,20 @@ function BentoCard({ announcement: ann, isAdmin, onClick, onEdit, onDelete, dele
               {ann.authorName && <span>By {ann.authorName}</span>}
               <span>{new Date(ann.createdAt).toLocaleDateString()}</span>
               {ann.expiresAt && <span className="text-amber-500">Expires {new Date(ann.expiresAt).toLocaleDateString()}</span>}
+              <span className="ml-auto flex items-center gap-2 shrink-0 text-slate-400 dark:text-slate-400">
+                <span className="flex items-center gap-1 font-semibold" title={`${ann.likeCount ?? 0} likes`}>
+                  <ThumbsUp className={cn("w-3 h-3", ann.likedByMe ? "text-sf-gold fill-sf-gold" : "")} />
+                  {ann.likeCount ?? 0}
+                </span>
+                <span className="flex items-center gap-1 font-semibold" title={`${ann.commentCount ?? 0} comments`}>
+                  <MessageCircle className="w-3 h-3" />
+                  {ann.commentCount ?? 0}
+                </span>
+                <span className="flex items-center gap-1 font-semibold" title={`${ann.viewCount ?? 0} views`}>
+                  <Eye className="w-3 h-3" />
+                  {ann.viewCount ?? 0}
+                </span>
+              </span>
             </div>
           </div>
           {isAdmin && (

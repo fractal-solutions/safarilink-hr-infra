@@ -332,6 +332,60 @@ db.exec(`
   )
 `);
 
+// Session timeout settings
+try {
+  db.exec("ALTER TABLE users ADD COLUMN session_timeout_minutes INTEGER");
+  console.log("Migration: added session_timeout_minutes to users");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration users session_timeout:", e.message);
+}
+try {
+  db.exec("ALTER TABLE sessions ADD COLUMN timeout_seconds INTEGER");
+  console.log("Migration: added timeout_seconds to sessions");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration sessions timeout_seconds:", e.message);
+}
+try {
+  db.exec("ALTER TABLE sessions ADD COLUMN last_activity_at TEXT");
+  console.log("Migration: added last_activity_at to sessions");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration sessions last_activity_at:", e.message);
+}
+
+// Announcement community engagement
+db.exec(`
+  CREATE TABLE IF NOT EXISTS announcement_likes (
+    announcement_id TEXT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (announcement_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS announcement_views (
+    announcement_id TEXT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    first_viewed_at TEXT NOT NULL,
+    last_viewed_at TEXT NOT NULL,
+    PRIMARY KEY (announcement_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS announcement_comments (
+    id TEXT PRIMARY KEY,
+    announcement_id TEXT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+    parent_id TEXT REFERENCES announcement_comments(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS announcement_comment_likes (
+    comment_id TEXT NOT NULL REFERENCES announcement_comments(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (comment_id, user_id)
+  );
+`);
+
 // Migration: add media size setting to sections (used by video sections)
 try {
   db.exec("ALTER TABLE sections ADD COLUMN size TEXT NOT NULL DEFAULT 'large'");
@@ -459,6 +513,17 @@ if (userCount.cnt === 0) {
 
 export default db;
 
+export const DEFAULT_SESSION_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
+export function effectiveTimeoutSeconds(user?: any): number {
+  const capRow = db.query("SELECT value FROM system_settings WHERE key = 'session_timeout_cap_seconds'").get() as any;
+  const cap = capRow?.value ? Number(capRow.value) : 0;
+  const userMinutes = user?.session_timeout_minutes ? Number(user.session_timeout_minutes) : 0;
+  let seconds = userMinutes > 0 ? userMinutes * 60 : DEFAULT_SESSION_SECONDS;
+  if (cap > 0) seconds = Math.min(seconds, cap);
+  return Math.max(60, seconds);
+}
+
 export function getSessionUser(req: Request): any | null {
   const cookie = req.headers.get("cookie") || "";
   const match = cookie.match(/session=([^;]+)/);
@@ -468,9 +533,27 @@ export function getSessionUser(req: Request): any | null {
   const session = db.query("SELECT * FROM sessions WHERE token = ?").get(token) as any;
   if (!session) return null;
 
-  if (new Date(session.expires_at) < new Date()) {
+  const nowMs = Date.now();
+  const timeoutSeconds = session.timeout_seconds ? Number(session.timeout_seconds) : DEFAULT_SESSION_SECONDS;
+  const lastActivity = session.last_activity_at
+    ? Date.parse(session.last_activity_at)
+    : session.created_at
+      ? Date.parse(session.created_at)
+      : nowMs;
+  const expired = Date.parse(session.expires_at) < nowMs || nowMs - lastActivity > timeoutSeconds * 1000;
+
+  if (expired) {
     db.run("DELETE FROM sessions WHERE token = ?", [token]);
     return null;
+  }
+
+  // Sliding renewal: bump activity on requests spaced far enough apart
+  if (nowMs - lastActivity > 30_000) {
+    const newExpires = new Date(nowMs + timeoutSeconds * 1000);
+    db.run(
+      "UPDATE sessions SET last_activity_at = ?, expires_at = ? WHERE token = ?",
+      [new Date(nowMs).toISOString(), newExpires.toISOString(), token]
+    );
   }
 
   const user = db.query("SELECT * FROM users WHERE id = ?").get(session.user_id) as any;
@@ -482,10 +565,11 @@ export function getSessionUser(req: Request): any | null {
 export function createSession(userId: string): string {
   const token = crypto.randomUUID();
   const now = new Date();
-  const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const timeoutSeconds = effectiveTimeoutSeconds(db.query("SELECT session_timeout_minutes FROM users WHERE id = ?").get(userId) as any);
+  const expires = new Date(now.getTime() + timeoutSeconds * 1000);
   db.run(
-    "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-    [token, userId, now.toISOString(), expires.toISOString()]
+    "INSERT INTO sessions (token, user_id, created_at, expires_at, timeout_seconds, last_activity_at) VALUES (?, ?, ?, ?, ?, ?)",
+    [token, userId, now.toISOString(), expires.toISOString(), timeoutSeconds, now.toISOString()]
   );
   return token;
 }

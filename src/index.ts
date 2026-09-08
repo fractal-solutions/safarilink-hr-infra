@@ -1,6 +1,6 @@
 import { serve } from "bun";
 import index from "./index.html";
-import db, { getSessionUser, createSession, setSessionCookie, clearSessionCookie, addAuditLog } from "./db";
+import db, { getSessionUser, createSession, setSessionCookie, clearSessionCookie, addAuditLog, DEFAULT_SESSION_SECONDS, effectiveTimeoutSeconds } from "./db";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "fs";
 import { join, extname, basename } from "path";
 import { execFile } from "node:child_process";
@@ -102,6 +102,14 @@ function parseRange(rangeHeader: string, size: number): { start: number; end: nu
   end = Math.min(end, size - 1);
   if (start > end) return null;
   return { start, end };
+}
+
+function userCanSeeAnnouncement(user: any, announcementId: string): boolean {
+  if (user.role === "admin") return true;
+  const annDept = (db.query("SELECT department_id FROM announcement_departments WHERE announcement_id = ?").all(announcementId) as any[]).map((r: any) => r.department_id);
+  if (annDept.length === 0) return true;
+  const userDept = (db.query("SELECT department_id FROM user_departments WHERE user_id = ?").all(user.id) as any[]).map((r: any) => r.department_id);
+  return annDept.some((d: string) => userDept.includes(d));
 }
 
 async function fireWebhook(webhookUrl: string, payload: any) {
@@ -1188,6 +1196,56 @@ const server = serve({
       },
     },
 
+    // ─── Session Timeout Settings ────────────────────────────
+
+    "/api/session-settings": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const capRow = db.query("SELECT value FROM system_settings WHERE key = 'session_timeout_cap_seconds'").get() as any;
+        const capSeconds = capRow?.value ? Number(capRow.value) : null;
+        const ownMinutes = user.session_timeout_minutes ? Number(user.session_timeout_minutes) : null;
+        return json({
+          ownMinutes,
+          capSeconds,
+          defaultSeconds: DEFAULT_SESSION_SECONDS,
+          effectiveSeconds: effectiveTimeoutSeconds(user),
+        });
+      },
+
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { minutes } = await readBody(req);
+        const val = minutes === null || minutes === undefined
+          ? null
+          : Math.max(5, Math.min(525600, Math.round(Number(minutes) || 0)));
+        db.run("UPDATE users SET session_timeout_minutes = ? WHERE id = ?", [val, user.id]);
+        return json({ ok: true, ownMinutes: val });
+      },
+    },
+
+    "/api/session-settings/cap": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { capSeconds } = await readBody(req);
+        const key = "session_timeout_cap_seconds";
+        const existing = db.query("SELECT key FROM system_settings WHERE key = ?").get(key);
+        if (capSeconds === null || capSeconds === undefined || !Number(capSeconds)) {
+          if (existing) db.run("DELETE FROM system_settings WHERE key = ?", [key]);
+          return json({ ok: true, capSeconds: null });
+        }
+        const secs = Math.max(300, Math.round(Number(capSeconds)));
+        if (existing) {
+          db.run("UPDATE system_settings SET value = ? WHERE key = ?", [String(secs), key]);
+        } else {
+          db.run("INSERT INTO system_settings (key, value) VALUES (?, ?)", [key, String(secs)]);
+        }
+        return json({ ok: true, capSeconds: secs });
+      },
+    },
+
     // ─── Announcements ───────────────────────────────────────
 
     "/api/announcements": {
@@ -1218,6 +1276,18 @@ const server = serve({
           return annDeptRows.some((ad: any) => userDeptIds.includes(ad.department_id));
         });
 
+        // Engagement aggregate maps
+        const likeAgg = db.query("SELECT announcement_id, COUNT(*) AS c FROM announcement_likes GROUP BY announcement_id").all() as any[];
+        const viewAgg = db.query("SELECT announcement_id, COUNT(*) AS c FROM announcement_views GROUP BY announcement_id").all() as any[];
+        const commentAgg = db.query("SELECT announcement_id, COUNT(*) AS c FROM announcement_comments GROUP BY announcement_id").all() as any[];
+        const likedSet = new Set((db.query("SELECT announcement_id FROM announcement_likes WHERE user_id = ?").all(user.id) as any[]).map((x: any) => x.announcement_id));
+        const likeCountMap: Record<string, number> = {};
+        const viewCountMap: Record<string, number> = {};
+        const commentCountMap: Record<string, number> = {};
+        for (const l of likeAgg) likeCountMap[l.announcement_id] = l.c;
+        for (const v of viewAgg) viewCountMap[v.announcement_id] = v.c;
+        for (const cm of commentAgg) commentCountMap[cm.announcement_id] = cm.c;
+
         return json(filtered.map((r: any) => {
           const annDeptRows = db.query(
             `SELECT d.id, d.name, d.color FROM departments d JOIN announcement_departments ad ON d.id = ad.department_id WHERE ad.announcement_id = ?`
@@ -1242,6 +1312,10 @@ const server = serve({
             authorName: r.author_name,
             createdAt: r.created_at,
             updatedAt: r.updated_at,
+            likeCount: likeCountMap[r.id] || 0,
+            commentCount: commentCountMap[r.id] || 0,
+            viewCount: viewCountMap[r.id] || 0,
+            likedByMe: likedSet.has(r.id),
           };
         }));
       },
@@ -1304,6 +1378,125 @@ const server = serve({
     },
 
     "/api/announcements/:id": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        const ann = db.query(
+          `SELECT a.*, u.display_name as author_name FROM announcements a LEFT JOIN users u ON a.created_by = u.id WHERE a.id = ?`
+        ).get(id) as any;
+        if (!ann) return notFound();
+        if (!userCanSeeAnnouncement(user, id)) return forbidden();
+
+        // Record a (unique-per-user) view on open
+        const now = new Date().toISOString();
+        db.run(
+          `INSERT INTO announcement_views (announcement_id, user_id, first_viewed_at, last_viewed_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT (announcement_id, user_id) DO UPDATE SET last_viewed_at = excluded.last_viewed_at`,
+          [id, user.id, now, now]
+        );
+
+        const likeCount = (db.query("SELECT COUNT(*) AS c FROM announcement_likes WHERE announcement_id = ?").get(id) as any).c;
+        const viewCount = (db.query("SELECT COUNT(*) AS c FROM announcement_views WHERE announcement_id = ?").get(id) as any).c;
+        const commentCount = (db.query("SELECT COUNT(*) AS c FROM announcement_comments WHERE announcement_id = ?").get(id) as any).c;
+        const likedByMe = !!db.query("SELECT 1 FROM announcement_likes WHERE announcement_id = ? AND user_id = ?").get(id, user.id);
+
+        const likeAggRows = db.query(
+          `SELECT comment_id, COUNT(*) AS c,
+                  SUM(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS mine
+           FROM announcement_comment_likes
+           WHERE comment_id IN (SELECT id FROM announcement_comments WHERE announcement_id = ?)
+           GROUP BY comment_id`
+        ).all(user.id, id) as any[];
+        const commentLikeCount: Record<string, number> = {};
+        const commentLikedSet = new Set<string>();
+        for (const l of likeAggRows) {
+          commentLikeCount[l.comment_id] = l.c;
+          if (l.mine) commentLikedSet.add(l.comment_id);
+        }
+
+        const crows = db.query(
+          `SELECT c.*, u.display_name AS author_name, u.role AS author_role
+           FROM announcement_comments c LEFT JOIN users u ON c.user_id = u.id
+           WHERE c.announcement_id = ?`
+        ).all(id) as any[];
+        const commentById: Record<string, any> = {};
+        const comments: any[] = [];
+        for (const c of crows) {
+          const shape = {
+            id: c.id,
+            body: c.body,
+            userId: c.user_id,
+            authorName: c.author_name || "Unknown",
+            authorRole: c.author_role,
+            createdAt: c.created_at,
+            likeCount: commentLikeCount[c.id] || 0,
+            likedByMe: commentLikedSet.has(c.id),
+          };
+          if (!c.parent_id) {
+            commentById[c.id] = { ...shape, replies: [] };
+            comments.push(commentById[c.id]);
+          } else if (commentById[c.parent_id]) {
+            commentById[c.parent_id].replies.push(shape);
+          }
+        }
+
+        // Rank by popularity (likes, then earliest first)
+        const popSort = (a: any, b: any) =>
+          (b.likeCount - a.likeCount) || (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0);
+        comments.sort(popSort);
+        comments.forEach((t: any, i: number) => {
+          t.rank = i + 1;
+          t.replies.sort(popSort);
+          t.replies.forEach((r: any, j: number) => { r.rank = j + 1; });
+        });
+
+        const viewers = user.role === "admin"
+          ? (db.query(
+              `SELECT v.user_id, u.display_name AS name, v.first_viewed_at, v.last_viewed_at
+               FROM announcement_views v LEFT JOIN users u ON u.id = v.user_id
+               WHERE v.announcement_id = ? ORDER BY v.last_viewed_at DESC`
+            ).all(id) as any[]).map((v: any) => ({
+              userId: v.user_id,
+              name: v.name || "Unknown",
+              firstViewedAt: v.first_viewed_at,
+              lastViewedAt: v.last_viewed_at,
+            }))
+          : null;
+
+        const annDeptRows = db.query(
+          `SELECT d.id, d.name, d.color FROM departments d JOIN announcement_departments ad ON d.id = ad.department_id WHERE ad.announcement_id = ?`
+        ).all(id) as any[];
+
+        return json({
+          id: ann.id,
+          title: ann.title,
+          content: ann.content,
+          type: ann.type,
+          departmentIds: annDeptRows.map((d: any) => d.id),
+          departmentNames: annDeptRows.map((d: any) => d.name),
+          departmentColors: annDeptRows.map((d: any) => d.color),
+          priority: ann.priority,
+          isPinned: !!ann.is_pinned,
+          imageUrl: ann.image_url,
+          emoji: ann.emoji,
+          gridSize: ann.grid_size || "medium",
+          sendToWebhook: !!ann.send_to_webhook,
+          sortOrder: ann.sort_order,
+          expiresAt: ann.expires_at,
+          createdBy: ann.created_by,
+          authorName: ann.author_name,
+          createdAt: ann.created_at,
+          updatedAt: ann.updated_at,
+          likeCount,
+          viewCount,
+          commentCount,
+          likedByMe,
+          comments,
+          viewers,
+        });
+      },
+
       async PUT(req) {
         const user = getSessionUser(req);
         if (!user || user.role !== "admin") return forbidden();
@@ -1364,6 +1557,95 @@ const server = serve({
           db.query("UPDATE announcements SET sort_order = ? WHERE id = ?").run(item.sort_order, item.id);
         }
         return json({ ok: true });
+      },
+    },
+
+    // ─── Announcement Community (likes / views / comments) ───
+
+    "/api/announcements/:id/like": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        const ann = db.query("SELECT id FROM announcements WHERE id = ?").get(id);
+        if (!ann) return notFound();
+        if (!userCanSeeAnnouncement(user, id)) return forbidden();
+        const now = new Date().toISOString();
+        const existing = db.query("SELECT 1 FROM announcement_likes WHERE announcement_id = ? AND user_id = ?").get(id, user.id);
+        if (existing) {
+          db.run("DELETE FROM announcement_likes WHERE announcement_id = ? AND user_id = ?", [id, user.id]);
+        } else {
+          db.run("INSERT INTO announcement_likes (announcement_id, user_id, created_at) VALUES (?, ?, ?)", [id, user.id, now]);
+        }
+        const count = (db.query("SELECT COUNT(*) AS c FROM announcement_likes WHERE announcement_id = ?").get(id) as any).c;
+        return json({ liked: !existing, count });
+      },
+    },
+
+    "/api/announcements/:id/comments": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        const ann = db.query("SELECT id FROM announcements WHERE id = ?").get(id);
+        if (!ann) return notFound();
+        if (!userCanSeeAnnouncement(user, id)) return forbidden();
+        const { body, parentId } = await readBody(req);
+        const text = typeof body === "string" ? body.trim().slice(0, 2000) : "";
+        if (!text) return json({ error: "Comment body required" }, 400);
+        if (parentId) {
+          const parent = db.query("SELECT parent_id FROM announcement_comments WHERE id = ? AND announcement_id = ?").get(parentId, id) as any;
+          if (!parent) return json({ error: "Parent comment not found" }, 404);
+          if (parent.parent_id) return json({ error: "Replies can only be one level deep" }, 400);
+        }
+        const cid = `cmt-${crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+        db.run(
+          "INSERT INTO announcement_comments (id, announcement_id, parent_id, user_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+          [cid, id, parentId || null, user.id, text, now]
+        );
+        addAuditLog(null, user.id, "announcement_comment", `Commented on "${ann.id}"`);
+        return json({
+          id: cid,
+          body: text,
+          userId: user.id,
+          authorName: user.display_name,
+          authorRole: user.role,
+          createdAt: now,
+        }, 201);
+      },
+    },
+
+    "/api/comments/:commentId": {
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { commentId } = req.params;
+        const comment = db.query("SELECT * FROM announcement_comments WHERE id = ?").get(commentId) as any;
+        if (!comment) return notFound();
+        if (user.role !== "admin" && comment.user_id !== user.id) return forbidden();
+        db.run("DELETE FROM announcement_comments WHERE id = ?", [commentId]);
+        return json({ ok: true });
+      },
+    },
+
+    "/api/comments/:commentId/like": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { commentId } = req.params;
+        const commentRow = db.query("SELECT announcement_id FROM announcement_comments WHERE id = ?").get(commentId) as any;
+        if (!commentRow) return notFound();
+        if (!userCanSeeAnnouncement(user, commentRow.announcement_id)) return forbidden();
+        const now = new Date().toISOString();
+        const existing = db.query("SELECT 1 FROM announcement_comment_likes WHERE comment_id = ? AND user_id = ?").get(commentId, user.id);
+        if (existing) {
+          db.run("DELETE FROM announcement_comment_likes WHERE comment_id = ? AND user_id = ?", [commentId, user.id]);
+        } else {
+          db.run("INSERT INTO announcement_comment_likes (comment_id, user_id, created_at) VALUES (?, ?, ?)", [commentId, user.id, now]);
+        }
+        const count = (db.query("SELECT COUNT(*) AS c FROM announcement_comment_likes WHERE comment_id = ?").get(commentId) as any).c;
+        return json({ liked: !existing, count });
       },
     },
 

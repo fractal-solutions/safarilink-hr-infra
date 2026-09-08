@@ -1,4 +1,4 @@
-import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner, SectionType, SectionSize } from "@/types";
+import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner, SectionType, SectionSize, AnnouncementDetail, AnnouncementComment, SessionSettings } from "@/types";
 
 const API_BASE = "/api";
 
@@ -532,4 +532,48 @@ export async function updateBanner(id: string, data: Partial<Banner>): Promise<b
 export async function deleteBanner(id: string): Promise<boolean> {
   const res = await request(`/banners/${id}`, { method: "DELETE" });
   return res !== null;
+}
+
+// Announcement community
+export async function getAnnouncementDetail(id: string): Promise<AnnouncementDetail | null> {
+  return request<AnnouncementDetail>(`/announcements/${id}`);
+}
+
+export async function toggleAnnouncementLike(id: string): Promise<{ liked: boolean; count: number } | null> {
+  return request<{ liked: boolean; count: number }>(`/announcements/${id}/like`, { method: "POST" });
+}
+
+export async function addAnnouncementComment(id: string, body: string, parentId?: string | null): Promise<AnnouncementComment | null> {
+  return request<AnnouncementComment>(`/announcements/${id}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body, parentId: parentId || null }),
+  });
+}
+
+export async function deleteAnnouncementComment(commentId: string): Promise<boolean> {
+  const res = await request(`/comments/${commentId}`, { method: "DELETE" });
+  return res !== null;
+}
+
+export async function toggleCommentLike(commentId: string): Promise<{ liked: boolean; count: number } | null> {
+  return request<{ liked: boolean; count: number }>(`/comments/${commentId}/like`, { method: "POST" });
+}
+
+// Session settings
+export async function getSessionSettings(): Promise<SessionSettings | null> {
+  return request<SessionSettings>("/session-settings");
+}
+
+export async function updateSessionTimeout(minutes: number | null): Promise<{ ok: boolean; ownMinutes?: number | null } | null> {
+  return request(`/session-settings`, {
+    method: "PUT",
+    body: JSON.stringify({ minutes }),
+  });
+}
+
+export async function setSessionTimeoutCap(capSeconds: number | null): Promise<{ ok: boolean; capSeconds?: number | null } | null> {
+  return request("/session-settings/cap", {
+    method: "PUT",
+    body: JSON.stringify({ capSeconds }),
+  });
 }

@@ -424,6 +424,7 @@ function AppInner() {
           <div className="h-full overflow-y-auto">
             <BulletinBoard
               isAdmin={isAdmin}
+              activeUserId={user.id}
               departments={departments}
               documents={documents}
               onSelectDepartment={(deptId) => {

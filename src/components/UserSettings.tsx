@@ -11,8 +11,9 @@ import {
   Palette,
   Plus,
   Check,
+  Timer,
 } from "lucide-react";
-import type { User, Department } from "@/types";
+import type { User, Department, SessionSettings } from "@/types";
 import { DepartmentManager } from "./DepartmentManager";
 import { ThemePicker } from "./ThemePicker";
 import * as api from "@/api";
@@ -33,22 +34,47 @@ export function UserSettings({ isOpen, onClose, currentUser, departments = [], o
   const [editingPassword, setEditingPassword] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [activeTab, setActiveTab] = useState<"my-depts" | "users" | "departments" | "theme">(
+  const [activeTab, setActiveTab] = useState<"my-depts" | "users" | "departments" | "theme" | "security">(
     currentUser?.role === "admin" ? "users" : "my-depts"
   );
   const [myDepts, setMyDepts] = useState<Department[]>([]);
   const [userDeptsMap, setUserDeptsMap] = useState<Record<string, Department[]>>({});
   const [managingUserDepts, setManagingUserDepts] = useState<string | null>(null);
+  const [sessionSettings, setSessionSettings] = useState<SessionSettings | null>(null);
+  const [timeoutMinutes, setTimeoutMinutes] = useState<string>("");
+  const [capMinutes, setCapMinutes] = useState<string>("");
+  const [sessionMsg, setSessionMsg] = useState("");
+
+  const fmtDuration = (seconds: number): string => {
+    if (!seconds || seconds <= 0) return "";
+    const m = Math.round(seconds / 60);
+    if (m < 60) return `${m} minute${m === 1 ? "" : "s"}`;
+    const h = m / 60;
+    if (h < 24 && Number.isInteger(h)) return `${h} hour${h === 1 ? "" : "s"}`;
+    if (h < 24) return `${Math.round(h)} minutes`;
+    const d = h / 24;
+    if (Number.isInteger(d)) return `${d} day${d === 1 ? "" : "s"}`;
+    return `${Math.floor(d)}d ${Math.round((d % 1) * 24)}h`;
+  };
+
+  const reloadSessionSettings = async () => {
+    const s = await api.getSessionSettings();
+    setSessionSettings(s);
+    setTimeoutMinutes(s?.ownMinutes ? String(s.ownMinutes) : "");
+    setCapMinutes(s?.capSeconds ? String(Math.round(s.capSeconds / 60)) : "");
+  };
 
   useEffect(() => {
     if (isOpen) {
       if (currentUser?.role === "admin") load();
       loadMyDepts();
+      reloadSessionSettings();
       setConfirmDelete(null);
       setEditingPassword(null);
       setNewPassword("");
       setPasswordError("");
       setManagingUserDepts(null);
+      setSessionMsg("");
     }
   }, [isOpen]);
 
@@ -125,6 +151,48 @@ export function UserSettings({ isOpen, onClose, currentUser, departments = [], o
     }
   };
 
+  const saveSessionTimeout = async () => {
+    let minutes: number | null = null;
+    if (timeoutMinutes !== "") {
+      const val = Number(timeoutMinutes);
+      if (!Number.isFinite(val) || val < 5) {
+        setSessionMsg("Enter at least 5 minutes, or pick 'Default'.");
+        return;
+      }
+      minutes = Math.round(val);
+    }
+    const res = await api.updateSessionTimeout(minutes);
+    if (res?.ok) {
+      setSessionMsg(minutes
+        ? `Saved — sessions time out after ${fmtDuration(minutes * 60)} of inactivity (applies to new sign-ins).`
+        : "Saved — back to the default timeout (applies to new sign-ins).");
+      await reloadSessionSettings();
+    } else {
+      setSessionMsg("Failed to save timeout.");
+    }
+  };
+
+  const saveGlobalCap = async () => {
+    let capSeconds: number | null = null;
+    if (capMinutes !== "") {
+      const val = Number(capMinutes);
+      if (!Number.isFinite(val) || val < 5) {
+        setSessionMsg("Global cap must be at least 5 minutes, or clear to disable.");
+        return;
+      }
+      capSeconds = Math.round(val * 60);
+    }
+    const res = await api.setSessionTimeoutCap(capSeconds);
+    if (res?.ok) {
+      setSessionMsg(capSeconds
+        ? `Global cap set to ${fmtDuration(capSeconds)}. Users with longer timeouts are capped at this.`
+        : "Global cap cleared.");
+      await reloadSessionSettings();
+    } else {
+      setSessionMsg("Failed to save global cap (admins only).");
+    }
+  };
+
   if (!isOpen) return null;
 
   const isAdmin = currentUser?.role === "admin";
@@ -157,6 +225,9 @@ export function UserSettings({ isOpen, onClose, currentUser, departments = [], o
               <Building2 className="w-3.5 h-3.5" /> Manage
             </button>
           )}
+          <button onClick={() => setActiveTab("security")} className={cn("flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5", activeTab === "security" ? "bg-white dark:bg-slate-600 text-sf-brown dark:text-slate-100 shadow-xs" : "text-slate-500 hover:text-slate-700")}>
+            <Timer className="w-3.5 h-3.5" /> Timeout
+          </button>
           <button onClick={() => setActiveTab("theme")} className={cn("flex-1 px-3 py-2 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5", activeTab === "theme" ? "bg-white dark:bg-slate-600 text-sf-brown dark:text-slate-100 shadow-xs" : "text-slate-500 hover:text-slate-700")}>
             <Palette className="w-3.5 h-3.5" /> Theme
           </button>
@@ -203,6 +274,100 @@ export function UserSettings({ isOpen, onClose, currentUser, departments = [], o
         {activeTab === "departments" && isAdmin && (
           <div className="flex-1 overflow-y-auto">
             <DepartmentManager departments={departments} onRefresh={onRefreshDepartments ?? (() => {})} />
+          </div>
+        )}
+
+        {/* Security / Session Timeout Tab */}
+        {activeTab === "security" && (
+          <div className="flex-1 overflow-y-auto p-1 space-y-4">
+            <div>
+              <p className="text-sm font-bold text-sf-brown dark:text-slate-100 flex items-center gap-2 mb-1">
+                <Timer className="w-4 h-4 text-sf-gold" /> Session Timeout
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                You'll be signed out automatically after this long without activity. Default is{" "}
+                {sessionSettings ? fmtDuration(sessionSettings.defaultSeconds) : "7 days"}.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                My timeout
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={timeoutMinutes}
+                  onChange={(e) => { setTimeoutMinutes(e.target.value); setSessionMsg(""); }}
+                  className="flex-1 px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+                >
+                  <option value="">Default (7 days)</option>
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="120">2 hours</option>
+                  <option value="240">4 hours</option>
+                  <option value="480">8 hours</option>
+                  <option value="720">12 hours</option>
+                  <option value="1440">1 day</option>
+                  <option value="2880">2 days</option>
+                  <option value="10080">7 days</option>
+                </select>
+                <button
+                  onClick={saveSessionTimeout}
+                  className="px-3 py-2 bg-sf-brown hover:bg-sf-brown-dark text-white text-xs font-semibold rounded-lg transition-colors shrink-0"
+                >
+                  Save
+                </button>
+              </div>
+              {sessionSettings?.capSeconds && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                  An administrator cap of {fmtDuration(sessionSettings.capSeconds)} applies — anything longer is reduced to the cap.
+                </p>
+              )}
+              <p className="text-[11px] text-slate-400 mt-1">
+                {sessionSettings ? `Effective timeout: ${fmtDuration(sessionSettings.effectiveSeconds)} of inactivity.` : ""} Changes apply to your next sign-in.
+              </p>
+            </div>
+
+            {isAdmin && (
+              <div className="border-t border-sf-cream-dark dark:border-slate-600 pt-3">
+                <label className="text-xs font-semibold text-sf-brown dark:text-slate-200 uppercase tracking-wider mb-1 block">
+                  Global maximum (admin)
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                  Caps how long any user can stay signed in. Leave blank to disable the cap.
+                </p>
+                <div className="flex gap-2">
+                  <select
+                    value={capMinutes}
+                    onChange={(e) => { setCapMinutes(e.target.value); setSessionMsg(""); }}
+                    className="flex-1 px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm"
+                  >
+                    <option value="">No cap</option>
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="240">4 hours</option>
+                    <option value="480">8 hours</option>
+                    <option value="1440">1 day</option>
+                    <option value="2880">2 days</option>
+                    <option value="10080">7 days</option>
+                  </select>
+                  <button
+                    onClick={saveGlobalCap}
+                    className="px-3 py-2 bg-sf-brown hover:bg-sf-brown-dark text-white text-xs font-semibold rounded-lg transition-colors shrink-0"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {sessionMsg && (
+              <p className="text-[11px] font-medium text-sf-gold-dark dark:text-sf-gold bg-sf-cream dark:bg-slate-700 border border-sf-cream-dark dark:border-slate-600 rounded-lg px-3 py-2">
+                {sessionMsg}
+              </p>
+            )}
           </div>
         )}
 
