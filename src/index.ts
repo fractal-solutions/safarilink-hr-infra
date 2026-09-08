@@ -112,6 +112,13 @@ function userCanSeeAnnouncement(user: any, announcementId: string): boolean {
   return annDept.some((d: string) => userDept.includes(d));
 }
 
+function userCanSeeCourse(user: any, courseDepartmentId: string | null): boolean {
+  if (user.role === "admin") return true;
+  if (!courseDepartmentId) return true;
+  const userDept = (db.query("SELECT department_id FROM user_departments WHERE user_id = ?").all(user.id) as any[]).map((r: any) => r.department_id);
+  return userDept.includes(courseDepartmentId);
+}
+
 async function fireWebhook(webhookUrl: string, payload: any) {
   try {
     await fetch(webhookUrl, {
@@ -1073,6 +1080,200 @@ const server = serve({
         db.exec("PRAGMA foreign_keys = ON");
         addAuditLog(null, user.id, "data_import", `Imported ${data.documents?.length ?? 0} documents`);
         return json({ ok: true, imported: { documents: data.documents?.length ?? 0, sections: data.sections?.length ?? 0 } });
+      },
+    },
+
+    // ─── Training Courses ────────────────────────────────────
+
+    "/api/courses": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const rows = db.query(
+          `SELECT c.*, d.name AS dept_name, d.color AS dept_color
+           FROM courses c LEFT JOIN departments d ON d.id = c.department_id
+           WHERE c.archived = 0 ORDER BY c.sort_order ASC, c.created_at DESC`
+        ).all() as any[];
+        const filtered = user.role === "admin" ? rows : rows.filter((r: any) => userCanSeeCourse(user, r.department_id));
+        const sectionAgg = db.query("SELECT course_id, COUNT(*) AS c FROM course_sections GROUP BY course_id").all() as any[];
+        const countMap: Record<string, number> = {};
+        for (const s of sectionAgg) countMap[s.course_id] = s.c;
+        return json(filtered.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          description: c.description || "",
+          departmentId: c.department_id,
+          departmentName: c.dept_name ?? null,
+          departmentColor: c.dept_color ?? null,
+          passmarkPct: c.passmark_pct ?? 60,
+          tiers: (() => { try { return JSON.parse(c.tiers || "[]"); } catch { return []; } })(),
+          expiryMonths: c.expiry_months,
+          sectionCount: countMap[c.id] || 0,
+          archived: !!c.archived,
+          createdAt: c.created_at,
+          updatedAt: c.updated_at,
+        })));
+      },
+
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const body = await readBody(req);
+        const title = typeof body.title === "string" ? body.title.trim() : "";
+        if (!title) return json({ error: "Title required" }, 400);
+        const id = `crs-${crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+        const maxOrder = (db.query("SELECT MAX(sort_order) AS m FROM courses").get() as any).m ?? -1;
+        const tiers = JSON.stringify(Array.isArray(body.tiers) ? body.tiers : []);
+        db.query(
+          `INSERT INTO courses (id, title, description, department_id, passmark_pct, tiers, expiry_months, sort_order, archived, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
+        ).run(id, title, body.description || "", body.departmentId || null, Number(body.passmarkPct) || 60, tiers, body.expiryMonths ?? null, maxOrder + 1, user.id, now, now);
+        addAuditLog(null, user.id, "course_create", `Created course "${title}"`);
+        return json({
+          id, title, description: body.description || "", departmentId: body.departmentId || null,
+          passmarkPct: Number(body.passmarkPct) || 60, tiers: body.tiers || [], expiryMonths: body.expiryMonths ?? null,
+          sectionCount: 0, archived: false, createdAt: now, updatedAt: now,
+        }, 201);
+      },
+    },
+
+    "/api/courses/:id": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        const row = db.query(
+          `SELECT c.*, d.name AS dept_name, d.color AS dept_color
+           FROM courses c LEFT JOIN departments d ON d.id = c.department_id WHERE c.id = ?`
+        ).get(id) as any;
+        if (!row) return notFound();
+        if (!userCanSeeCourse(user, row.department_id)) return forbidden();
+        const sections = db.query("SELECT * FROM course_sections WHERE course_id = ? ORDER BY sort_order").all(id);
+        return json({
+          id: row.id,
+          title: row.title,
+          description: row.description || "",
+          departmentId: row.department_id,
+          departmentName: row.dept_name ?? null,
+          departmentColor: row.dept_color ?? null,
+          passmarkPct: row.passmark_pct ?? 60,
+          tiers: (() => { try { return JSON.parse(row.tiers || "[]"); } catch { return []; } })(),
+          expiryMonths: row.expiry_months,
+          sectionCount: sections.length,
+          archived: !!row.archived,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          sections: sections.map((s: any) => ({
+            id: s.id, title: s.title, type: s.type || "richtext", content: s.content || "",
+            url: s.url ?? null, originalUrl: s.original_url ?? null, size: s.size || "large", sortOrder: s.sort_order,
+          })),
+        });
+      },
+
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const course = db.query("SELECT * FROM courses WHERE id = ?").get(id) as any;
+        if (!course) return notFound();
+        const body = await readBody(req);
+        const now = new Date().toISOString();
+        db.query(
+          `UPDATE courses SET title = ?, description = ?, department_id = ?, passmark_pct = ?, tiers = ?, expiry_months = ?, updated_at = ? WHERE id = ?`
+        ).run(
+          typeof body.title === "string" && body.title.trim() ? body.title.trim() : course.title,
+          body.description !== undefined ? body.description : course.description,
+          body.departmentId !== undefined ? (body.departmentId || null) : course.department_id,
+          body.passmarkPct !== undefined ? Number(body.passmarkPct) : course.passmark_pct,
+          Array.isArray(body.tiers) ? JSON.stringify(body.tiers) : course.tiers,
+          body.expiryMonths !== undefined ? body.expiryMonths : course.expiry_months,
+          now, id
+        );
+        addAuditLog(null, user.id, "course_update", `Updated course "${course.title}"`);
+        return json({ ok: true });
+      },
+
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const course = db.query("SELECT * FROM courses WHERE id = ?").get(id) as any;
+        if (!course) return notFound();
+        db.query("DELETE FROM courses WHERE id = ?").run(id);
+        addAuditLog(null, user.id, "course_delete", `Deleted course "${course.title}"`);
+        return json({ ok: true });
+      },
+    },
+
+    "/api/courses/:courseId/sections": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { courseId } = req.params;
+        const course = db.query("SELECT id FROM courses WHERE id = ?").get(courseId);
+        if (!course) return notFound();
+        const { title, type, content, url, originalUrl, size } = await readBody(req);
+        if (!title) return json({ error: "Title required" }, 400);
+        const id = `cs-${crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+        const maxOrder = (db.query("SELECT MAX(sort_order) AS m FROM course_sections WHERE course_id = ?").get(courseId) as any).m ?? -1;
+        const allowed = ["richtext", "video", "pdf", "slides", "quiz"];
+        const secType = allowed.includes(type) ? type : "richtext";
+        const secSize = ["small", "medium", "large", "full"].includes(size) ? size : "large";
+        db.query(
+          `INSERT INTO course_sections (id, course_id, title, type, content, url, original_url, size, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(id, courseId, title, secType, content || "", url || null, originalUrl || null, secSize, maxOrder + 1, now, now);
+        return json({ id, title, type: secType, content: content || "", url: url || null, originalUrl: originalUrl || null, size: secSize, sortOrder: maxOrder + 1 }, 201);
+      },
+    },
+
+    "/api/course-sections/:id": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const sec = db.query("SELECT * FROM course_sections WHERE id = ?").get(id) as any;
+        if (!sec) return notFound();
+        const body = await readBody(req);
+        const allowed = ["richtext", "video", "pdf", "slides", "quiz"];
+        const now = new Date().toISOString();
+        db.query(
+          `UPDATE course_sections SET title = ?, type = ?, content = ?, url = ?, original_url = ?, size = ?, updated_at = ? WHERE id = ?`
+        ).run(
+          typeof body.title === "string" && body.title.trim() ? body.title.trim() : sec.title,
+          body.type !== undefined ? (allowed.includes(body.type) ? body.type : sec.type) : sec.type,
+          body.content !== undefined ? body.content : sec.content,
+          body.url !== undefined ? (body.url || null) : sec.url,
+          body.originalUrl !== undefined ? (body.originalUrl || null) : sec.original_url,
+          ["small", "medium", "large", "full"].includes(body.size) ? body.size : sec.size,
+          now, id
+        );
+        return json({ ok: true });
+      },
+
+      async DELETE(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { id } = req.params;
+        const sec = db.query("SELECT * FROM course_sections WHERE id = ?").get(id) as any;
+        if (!sec) return notFound();
+        db.query("DELETE FROM course_sections WHERE id = ?").run(id);
+        return json({ ok: true });
+      },
+    },
+
+    "/api/course-sections/reorder": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { order } = await readBody(req);
+        if (!Array.isArray(order)) return json({ error: "order array required" }, 400);
+        for (const item of order) {
+          db.query("UPDATE course_sections SET sort_order = ? WHERE id = ?").run(item.sort_order, item.id);
+        }
+        return json({ ok: true });
       },
     },
 

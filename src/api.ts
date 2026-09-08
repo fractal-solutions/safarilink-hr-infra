@@ -1,4 +1,4 @@
-import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner, SectionType, SectionSize, AnnouncementDetail, AnnouncementComment, SessionSettings } from "@/types";
+import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner, SectionType, SectionSize, AnnouncementDetail, AnnouncementComment, SessionSettings, Course, CourseDetail, CourseSection, CourseSectionType } from "@/types";
 
 const API_BASE = "/api";
 
@@ -576,4 +576,58 @@ export async function setSessionTimeoutCap(capSeconds: number | null): Promise<{
     method: "PUT",
     body: JSON.stringify({ capSeconds }),
   });
+}
+
+// Training / Courses
+export interface CourseInput {
+  title: string;
+  description?: string;
+  departmentId?: string | null;
+  passmarkPct?: number;
+  tiers?: { min: number; title: string }[];
+  expiryMonths?: number | null;
+}
+
+export async function getCourses(): Promise<Course[]> {
+  return (await request<Course[]>("/courses")) ?? [];
+}
+
+export async function getCourseDetail(id: string): Promise<CourseDetail | null> {
+  return request<CourseDetail>(`/courses/${id}`);
+}
+
+export async function createCourse(input: CourseInput): Promise<Course | null> {
+  return request<Course>("/courses", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateCourse(id: string, data: Partial<CourseInput>): Promise<boolean> {
+  const res = await request(`/courses/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return res !== null;
+}
+
+export async function deleteCourse(id: string): Promise<boolean> {
+  const res = await request(`/courses/${id}`, { method: "DELETE" });
+  return res !== null;
+}
+
+export async function createCourseSection(courseId: string, input: {
+  title: string; type: CourseSectionType; content?: string; url?: string | null; originalUrl?: string | null; size?: SectionSize;
+}): Promise<boolean> {
+  const res = await request(`/courses/${courseId}/sections`, { method: "POST", body: JSON.stringify(input) });
+  return res !== null;
+}
+
+export async function updateCourseSection(id: string, data: Partial<{ title: string; type: CourseSectionType; content?: string; url?: string | null; originalUrl?: string | null; size?: SectionSize }>): Promise<boolean> {
+  const res = await request(`/course-sections/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return res !== null;
+}
+
+export async function deleteCourseSection(id: string): Promise<boolean> {
+  const res = await request(`/course-sections/${id}`, { method: "DELETE" });
+  return res !== null;
+}
+
+export async function reorderCourseSections(order: { id: string; sort_order: number }[]): Promise<boolean> {
+  const res = await request("/course-sections/reorder", { method: "PUT", body: JSON.stringify({ order }) });
+  return res !== null;
 }

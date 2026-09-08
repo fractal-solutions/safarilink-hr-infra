@@ -15,6 +15,43 @@ export type SectionType = "richtext" | "video" | "pdf" | "slides";
 
 export type SectionSize = "small" | "medium" | "large" | "full";
 
+export type CourseSectionType = SectionType | "quiz";
+
+export interface CourseTier {
+  min: number;
+  title: string;
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  description: string;
+  departmentId: string | null;
+  departmentName?: string;
+  departmentColor?: string;
+  passmarkPct: number;
+  tiers: CourseTier[];
+  expiryMonths: number | null;
+  sectionCount: number;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseSection {
+  id: string;
+  title: string;
+  type: CourseSectionType;
+  content: string;
+  url: string | null;
+  originalUrl: string | null;
+  size?: SectionSize;
+}
+
+export interface CourseDetail extends Course {
+  sections: CourseSection[];
+}
+
 export interface Section {
   id: string;
   title: string;

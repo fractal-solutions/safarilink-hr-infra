@@ -386,6 +386,88 @@ db.exec(`
   );
 `);
 
+// Training: courses + content sections (content types mirror policy manual sections)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS courses (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+    passmark_pct REAL NOT NULL DEFAULT 60,
+    tiers TEXT NOT NULL DEFAULT '[]',
+    expiry_months INTEGER,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS course_sections (
+    id TEXT PRIMARY KEY,
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'richtext',
+    content TEXT NOT NULL DEFAULT '',
+    url TEXT,
+    original_url TEXT,
+    size TEXT NOT NULL DEFAULT 'large',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS course_attempts (
+    id TEXT PRIMARY KEY,
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    started_at TEXT NOT NULL,
+    submitted_at TEXT,
+    graded_at TEXT,
+    status TEXT NOT NULL DEFAULT 'in_progress',
+    auto_pct REAL,
+    final_pct REAL,
+    tier_index INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS course_attempt_answers (
+    id TEXT PRIMARY KEY,
+    attempt_id TEXT NOT NULL REFERENCES course_attempts(id) ON DELETE CASCADE,
+    section_id TEXT REFERENCES course_sections(id) ON DELETE CASCADE,
+    question_index INTEGER NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL DEFAULT 'mcq',
+    answer TEXT,
+    correct INTEGER,
+    points REAL,
+    max_points REAL,
+    graded_by TEXT REFERENCES users(id),
+    graded_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS course_ratings (
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    stars INTEGER NOT NULL DEFAULT 0,
+    comment TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (course_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS course_certificates (
+    id TEXT PRIMARY KEY,
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    attempt_id TEXT REFERENCES course_attempts(id) ON DELETE SET NULL,
+    tier_index INTEGER,
+    tier_title TEXT,
+    pct REAL NOT NULL,
+    issued_at TEXT NOT NULL,
+    expires_at TEXT,
+    UNIQUE (course_id, user_id)
+  );
+`);
+
 // Migration: add media size setting to sections (used by video sections)
 try {
   db.exec("ALTER TABLE sections ADD COLUMN size TEXT NOT NULL DEFAULT 'large'");

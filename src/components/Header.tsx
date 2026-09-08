@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Settings, LogOut, Moon, Sun, Search, Menu, X, LayoutDashboard, BookOpen, Eye } from "lucide-react";
+import { Settings, LogOut, Moon, Sun, Search, Menu, X, LayoutDashboard, BookOpen, GraduationCap, Eye } from "lucide-react";
 import type { User as UserType } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -10,8 +10,8 @@ interface HeaderProps {
   isDark: boolean;
   onToggleDark: () => void;
   onSearch: (query: string) => void;
-  activeView: "bulletin" | "manuals";
-  onViewChange: (view: "bulletin" | "manuals") => void;
+  activeView: "bulletin" | "manuals" | "training";
+  onViewChange: (view: "bulletin" | "manuals" | "training") => void;
 }
 
 export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, onSearch, activeView, onViewChange }: HeaderProps) {
@@ -121,6 +121,17 @@ export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, o
         >
           <BookOpen className="w-4 h-4" /> Policy Manuals
         </button>
+        <button
+          onClick={() => onViewChange("training")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200",
+            activeView === "training"
+              ? "bg-gradient-to-b from-[#dfc063] to-sf-gold text-sf-brown-dark shadow-sm"
+              : "text-sf-gold-light/80 hover:text-white hover:bg-white/10"
+          )}
+        >
+          <GraduationCap className="w-4 h-4" /> Training
+        </button>
       </nav>
 
       {/* Desktop Right */}
@@ -221,6 +232,17 @@ export function Header({ user, onLogout, onOpenSettings, isDark, onToggleDark, o
               )}
             >
               <BookOpen className="w-4 h-4" /> Manuals
+            </button>
+            <button
+              onClick={() => { onViewChange("training"); setShowMobileMenu(false); }}
+              className={cn(
+                "flex items-center gap-2 flex-1 justify-center px-3 py-2 rounded-full text-sm font-medium transition-all",
+                activeView === "training"
+                  ? "bg-gradient-to-b from-[#dfc063] to-sf-gold text-sf-brown-dark shadow-sm"
+                  : "text-sf-gold-light/70 hover:text-white hover:bg-white/10"
+              )}
+            >
+              <GraduationCap className="w-4 h-4" /> Training
             </button>
           </div>
 

@@ -19,6 +19,7 @@ import { DueDateDashboard } from "@/components/DueDateDashboard";
 import { VersionHistory } from "@/components/VersionHistory";
 import { ImportExport } from "@/components/ImportExport";
 import { BulletinBoard } from "@/components/BulletinBoard";
+import { TrainingView } from "@/components/Training";
 import { Tip } from "@/components/Tip";
 import { applyTheme } from "@/themes";
 import { ListPlus, BarChart3, BookOpen, Calendar, Mail, X, Trash2, RotateCcw, Search, ChevronRight } from "lucide-react";
@@ -52,7 +53,7 @@ function AppInner() {
   const [trashDocs, setTrashDocs] = useState<{ id: string; title: string; deletedAt: string }[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [activeDepartmentId, setActiveDepartmentId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"bulletin" | "manuals">("bulletin");
+  const [activeView, setActiveView] = useState<"bulletin" | "manuals" | "training">("bulletin");
   const [userTheme, setUserTheme] = useState("safari");
 
   const loadDocs = useCallback(async () => {
@@ -159,7 +160,7 @@ function AppInner() {
     setShowAuth(true);
   }, []);
 
-  const handleViewChange = useCallback((view: "bulletin" | "manuals") => {
+  const handleViewChange = useCallback((view: "bulletin" | "manuals" | "training") => {
     setActiveView(view);
     if (view === "bulletin") {
       setActiveDocId(null);
@@ -168,6 +169,13 @@ function AppInner() {
       setViewingDueDates(false);
       setViewingTrash(false);
       setActiveDepartmentId(null);
+    }
+    if (view === "training") {
+      setActiveDocId(null);
+      setViewingReports(false);
+      setViewingOverallAnalytics(false);
+      setViewingDueDates(false);
+      setViewingTrash(false);
     }
   }, []);
 
@@ -437,6 +445,13 @@ function AppInner() {
             />
           </div>
         </main>
+      ) : activeView === "training" ? (
+        <TrainingView
+          isAdmin={isAdmin}
+          userId={user.id}
+          currentRole={user.role}
+          departments={departments}
+        />
       ) : (
         <main className="flex-1 flex overflow-hidden min-h-0 pt-4 px-4 pb-4 gap-4">
           {/* Desktop Sidebar */}
