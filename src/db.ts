@@ -281,6 +281,65 @@ try {
   if (!e.message?.includes("duplicate column")) console.error("Migration banners send_to_webhook:", e.message);
 }
 
+// Migration: add media type columns to sections
+try {
+  db.exec("ALTER TABLE sections ADD COLUMN type TEXT NOT NULL DEFAULT 'richtext'");
+  console.log("Migration: added type column to sections");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration sections type:", e.message);
+}
+try {
+  db.exec("ALTER TABLE sections ADD COLUMN url TEXT");
+  console.log("Migration: added url column to sections");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration sections url:", e.message);
+}
+try {
+  db.exec("ALTER TABLE sections ADD COLUMN original_url TEXT");
+  console.log("Migration: added original_url column to sections");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration sections original_url:", e.message);
+}
+
+// Migration: add media type columns to section_versions
+try {
+  db.exec("ALTER TABLE section_versions ADD COLUMN type TEXT NOT NULL DEFAULT 'richtext'");
+  console.log("Migration: added type column to section_versions");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration section_versions type:", e.message);
+}
+try {
+  db.exec("ALTER TABLE section_versions ADD COLUMN url TEXT");
+  console.log("Migration: added url column to section_versions");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration section_versions url:", e.message);
+}
+try {
+  db.exec("ALTER TABLE section_versions ADD COLUMN original_url TEXT");
+  console.log("Migration: added original_url column to section_versions");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration section_versions original_url:", e.message);
+}
+
+// Per-user media progress (e.g. video resume timestamps)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS section_progress (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    section_id TEXT NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
+    position_seconds REAL NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, section_id)
+  )
+`);
+
+// Migration: add media size setting to sections (used by video sections)
+try {
+  db.exec("ALTER TABLE sections ADD COLUMN size TEXT NOT NULL DEFAULT 'large'");
+  console.log("Migration: added size column to sections");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration sections size:", e.message);
+}
+
 // Migration: ensure "general" department exists
 const generalDept = db.query("SELECT id FROM departments WHERE slug = 'general'").get() as any;
 if (!generalDept) {

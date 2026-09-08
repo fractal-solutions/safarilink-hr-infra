@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BookMarked,
   FolderOpen,
@@ -7,9 +7,17 @@ import {
   ChevronDown,
   Pencil,
   History,
+  Presentation,
+  FileDown,
+  Video,
+  FileText,
+  Maximize2,
 } from "lucide-react";
-import type { PolicyDocument, UserRole } from "@/types";
+import type { PolicyDocument, UserRole, Section } from "@/types";
 import { cn } from "@/lib/utils";
+import { VideoSection } from "./VideoSection";
+import { PdfViewer } from "./PdfViewer";
+import { SectionFullscreen } from "./SectionFullscreen";
 
 interface DocumentReaderProps {
   document: PolicyDocument | null;
@@ -17,6 +25,7 @@ interface DocumentReaderProps {
   tracking: Record<string, boolean>;
   activeUserId: string;
   onToggleRead: (sectionId: string) => void;
+  onMarkCompleted?: (sectionId: string) => void;
   onEditSection: (sectionId: string) => void;
   onViewVersions?: (sectionId: string) => void;
 }
@@ -27,10 +36,17 @@ export function DocumentReader({
   tracking,
   activeUserId,
   onToggleRead,
+  onMarkCompleted,
   onEditSection,
   onViewVersions,
 }: DocumentReaderProps) {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const [fullscreenSection, setFullscreenSection] = useState<Section | null>(null);
+
+  useEffect(() => {
+    setOpenSections(new Set());
+    setFullscreenSection(null);
+  }, [document?.id]);
 
   if (!document) {
     return (
@@ -73,6 +89,74 @@ export function DocumentReader({
       {document.sections.map((sec) => {
         const isRead = !!tracking[sec.id];
         const isOpen = openSections.has(sec.id);
+        const secType = sec.type || "richtext";
+
+        const renderBody = () => {
+          if (secType === "video") {
+            return sec.url ? (
+              <VideoSection
+                sectionId={sec.id}
+                url={sec.url}
+                size={sec.size ?? "large"}
+                currentRole={currentRole}
+                isRead={isRead}
+                onMarkCompleted={(id) => onMarkCompleted?.(id)}
+              />
+            ) : (
+              <div className="p-6 text-center text-slate-400 dark:text-slate-500">
+                <Video className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">This video section has no media attached yet.</p>
+              </div>
+            );
+          }
+          if (secType === "pdf") {
+            return sec.url ? (
+              <PdfViewer url={sec.url} />
+            ) : (
+              <div className="p-6 text-center text-slate-400 dark:text-slate-500">
+                <FileText className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">This PDF section has no file attached yet.</p>
+              </div>
+            );
+          }
+          if (secType === "slides") {
+            if (sec.url) return <PdfViewer url={sec.url} fallbackName={sec.originalUrl?.split("/").pop()} />;
+            if (sec.originalUrl) {
+              return (
+                <div className="p-6">
+                  <div className="rounded-xl border border-sf-cream-dark dark:border-slate-700 bg-sf-cream dark:bg-slate-800 p-6 text-center">
+                    <Presentation className="w-10 h-10 mx-auto mb-2 text-sf-brown dark:text-sf-gold" />
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                      Presentation preview unavailable
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                      The server could not convert this PowerPoint to a viewable preview.
+                    </p>
+                    <a
+                      href={sec.originalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sf-brown hover:bg-sf-brown-dark text-white text-xs font-semibold transition-colors"
+                    >
+                      <FileDown className="w-4 h-4" /> Download original (.pptx)
+                    </a>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div className="p-6 text-center text-slate-400 dark:text-slate-500">
+                <Presentation className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">This presentation section has no file attached yet.</p>
+              </div>
+            );
+          }
+          return (
+            <div className="p-5 prose prose-slate dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-300 leading-relaxed space-y-2">
+              <div dangerouslySetInnerHTML={{ __html: sec.content || "" }} />
+            </div>
+          );
+        };
 
         return (
           <div
@@ -106,6 +190,16 @@ export function DocumentReader({
                 </h3>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFullscreenSection(sec);
+                  }}
+                  className="p-1.5 rounded-md text-slate-400 dark:text-slate-500 hover:text-sf-brown dark:hover:text-sf-gold hover:bg-sf-cream dark:hover:bg-sf-brown/20 transition-colors"
+                  title="View fullscreen"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </span>
                 {currentRole === "admin" && onViewVersions && (
                   <span
                     onClick={(e) => {
@@ -147,9 +241,7 @@ export function DocumentReader({
 
             {isOpen && (
               <div className="border-t border-sf-cream-dark dark:border-slate-700">
-                <div className="p-5 prose prose-slate dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-300 leading-relaxed space-y-2">
-                  <div dangerouslySetInnerHTML={{ __html: sec.content }} />
-                </div>
+                {renderBody()}
 
                 <div className="px-5 pb-4 pt-1 border-t border-sf-cream-dark dark:border-slate-700">
                   {currentRole !== "admin" ? (
@@ -182,6 +274,15 @@ export function DocumentReader({
           </div>
         );
       })}
+      {fullscreenSection && (
+        <SectionFullscreen
+          section={fullscreenSection}
+          currentRole={currentRole}
+          isRead={!!tracking[fullscreenSection.id]}
+          onMarkCompleted={onMarkCompleted}
+          onClose={() => setFullscreenSection(null)}
+        />
+      )}
     </div>
   );
 }

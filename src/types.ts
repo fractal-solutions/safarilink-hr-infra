@@ -10,10 +10,18 @@ export interface User {
   createdAt: string;
 }
 
+export type SectionType = "richtext" | "video" | "pdf" | "slides";
+
+export type SectionSize = "small" | "medium" | "large" | "full";
+
 export interface Section {
   id: string;
   title: string;
   content: string;
+  type?: SectionType;
+  url?: string | null;
+  originalUrl?: string | null;
+  size?: SectionSize;
 }
 
 export interface PolicyDocument {
@@ -64,7 +72,7 @@ export interface Announcement {
   isPinned: boolean;
   imageUrl: string | null;
   emoji: string | null;
-  gridSize: "small" | "medium" | "large" | "wide" | "tall" | "xlarge" | "tall-3" | "tall-4" | "hero" | "hero-3" | "hero-4";
+  gridSize: "small" | "medium" | "large" | "wide" | "tall" | "xlarge" | "tall-3" | "tall-4" | "tallwide" | "hero" | "hero-3" | "hero-4";
   sendToWebhook: boolean;
   expiresAt: string | null;
   createdBy: string;

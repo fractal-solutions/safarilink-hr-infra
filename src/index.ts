@@ -1,8 +1,12 @@
 import { serve } from "bun";
 import index from "./index.html";
 import db, { getSessionUser, createSession, setSessionCookie, clearSessionCookie, addAuditLog } from "./db";
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
-import { join, extname } from "path";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "fs";
+import { join, extname, basename } from "path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const runExecFile = promisify(execFile);
 
 const UPLOADS_DIR = join(import.meta.dir, "..", "data", "uploads");
 if (!existsSync(UPLOADS_DIR)) {
@@ -13,6 +17,92 @@ const ASSETS_DIR = join(import.meta.dir, "..", "assets");
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
+
+const UPLOAD_MIME: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".pdf": "application/pdf",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+};
+
+const MEDIA_UPLOAD_LIMITS: Record<string, { mime: string[]; exts: string[]; maxBytes: number }> = {
+  video: {
+    mime: ["video/mp4", "video/webm"],
+    exts: [".mp4", ".webm"],
+    maxBytes: 300 * 1024 * 1024,
+  },
+  pdf: {
+    mime: ["application/pdf"],
+    exts: [".pdf"],
+    maxBytes: 50 * 1024 * 1024,
+  },
+  ppt: {
+    mime: ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+    exts: [".pptx"],
+    maxBytes: 50 * 1024 * 1024,
+  },
+};
+
+function sofficeCandidates(): string[] {
+  const fromEnv = process.env.LIBREOFFICE_PATH ? [process.env.LIBREOFFICE_PATH] : [];
+  return [
+    ...fromEnv,
+    "soffice",
+    "libreoffice",
+    "/usr/bin/soffice",
+    "/usr/local/bin/soffice",
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+    "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+    "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe",
+  ];
+}
+
+async function convertPptxToPdf(inputFile: string): Promise<string | null> {
+  const base = basename(inputFile, extname(inputFile));
+  const outFile = join(UPLOADS_DIR, `${base}.pdf`);
+  try {
+    rmSync(outFile, { force: true });
+  } catch {
+    // ignore
+  }
+  const args = ["--headless", "--convert-to", "pdf", "--outdir", UPLOADS_DIR, inputFile];
+  for (const bin of sofficeCandidates()) {
+    try {
+      await runExecFile(bin, args, { timeout: 180_000 });
+      if (existsSync(outFile)) return `${base}.pdf`;
+    } catch {
+      // try next candidate / binary
+    }
+  }
+  return null;
+}
+
+function parseRange(rangeHeader: string, size: number): { start: number; end: number } | null {
+  const m = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+  if (!m || size < 0) return null;
+  let start: number;
+  let end: number;
+  if (m[1] === "" && m[2] !== "") {
+    const suffix = parseInt(m[2], 10);
+    if (!isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = parseInt(m[1], 10);
+    end = m[2] === "" ? size - 1 : parseInt(m[2], 10);
+    if (!isFinite(start) || start < 0) return null;
+    if (m[2] !== "" && !isFinite(end)) return null;
+  }
+  if (start >= size) return null;
+  end = Math.min(end, size - 1);
+  if (start > end) return null;
+  return { start, end };
+}
 
 async function fireWebhook(webhookUrl: string, payload: any) {
   try {
@@ -354,6 +444,51 @@ const server = serve({
       },
     },
 
+    // ─── Media Upload (video / pdf / pptx) ────────────────────
+
+    "/api/media-upload": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const contentType = req.headers.get("content-type") || "";
+        if (!contentType.includes("multipart/form-data")) {
+          return json({ error: "Expected multipart/form-data" }, 400);
+        }
+        const form = await req.formData();
+        const kind = String(form.get("kind") || "video");
+        const file = form.get("file");
+        if (!file || typeof file === "string") {
+          return json({ error: "No file provided" }, 400);
+        }
+        const limits = MEDIA_UPLOAD_LIMITS[kind];
+        if (!limits) {
+          return json({ error: "Unsupported upload kind" }, 400);
+        }
+        const ext = extname(file.name || "").toLowerCase();
+        if (!limits.exts.includes(ext)) {
+          return json({ error: `File type "${ext || "(unknown)"}" not allowed for ${kind}` }, 400);
+        }
+        if (file.type && !limits.mime.includes(file.type)) {
+          return json({ error: "File type mismatch" }, 400);
+        }
+        if (file.size > limits.maxBytes) {
+          return json({ error: "File too large" }, 400);
+        }
+        const filename = `${crypto.randomUUID()}${ext}`;
+        const absPath = join(UPLOADS_DIR, filename);
+        await Bun.write(absPath, file);
+
+        if (kind === "ppt") {
+          const pdfName = await convertPptxToPdf(absPath);
+          if (pdfName) {
+            return json({ url: `/uploads/${pdfName}`, originalUrl: `/uploads/${filename}`, converted: true }, 201);
+          }
+          return json({ url: null, originalUrl: `/uploads/${filename}`, converted: false }, 201);
+        }
+        return json({ url: `/uploads/${filename}`, originalUrl: null, converted: true }, 201);
+      },
+    },
+
     // ─── Documents ───────────────────────────────────────────
 
     "/api/documents": {
@@ -380,6 +515,10 @@ const server = serve({
               id: s.id,
               title: s.title,
               content: s.content,
+              type: s.type || "richtext",
+              url: s.url ?? null,
+              originalUrl: s.original_url ?? null,
+              size: s.size || "large",
               sortOrder: s.sort_order,
               createdAt: s.created_at,
               updatedAt: s.updated_at,
@@ -475,8 +614,8 @@ const server = serve({
         const sections = db.query("SELECT * FROM sections WHERE document_id = ? ORDER BY sort_order").all(id);
         for (const sec of sections) {
           db.query(
-            "INSERT INTO sections (id, document_id, title, content, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-          ).run(crypto.randomUUID(), newDocId, (sec as any).title, (sec as any).content, (sec as any).sort_order, now, now);
+            "INSERT INTO sections (id, document_id, title, content, type, url, original_url, size, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).run(crypto.randomUUID(), newDocId, (sec as any).title, (sec as any).content, (sec as any).type || "richtext", (sec as any).url ?? null, (sec as any).original_url ?? null, (sec as any).size || "large", (sec as any).sort_order, now, now);
         }
 
         addAuditLog(newDocId, user.id, "document_duplicate", `Duplicated document "${doc.title}"`);
@@ -486,7 +625,7 @@ const server = serve({
           title: `${doc.title} (Copy)`,
           sortOrder: maxOrder + 1,
           archived: !!doc.archived,
-          sections: newSections.map((s: any) => ({ id: s.id, title: s.title, content: s.content, sortOrder: s.sort_order })),
+          sections: newSections.map((s: any) => ({ id: s.id, title: s.title, content: s.content, type: s.type || "richtext", url: s.url ?? null, originalUrl: s.original_url ?? null, size: s.size || "large", sortOrder: s.sort_order })),
         }, 201);
       },
     },
@@ -500,16 +639,18 @@ const server = serve({
         const { docId } = req.params;
         const doc = db.query("SELECT id FROM documents WHERE id = ?").get(docId);
         if (!doc) return notFound();
-        const { title, content } = await readBody(req);
+        const { title, type, content, url, originalUrl, size } = await readBody(req);
         if (!title) return json({ error: "Title required" }, 400);
         const id = `sec-${crypto.randomUUID()}`;
         const now = new Date().toISOString();
         const maxOrder = (db.query("SELECT MAX(sort_order) as m FROM sections WHERE document_id = ?").get(docId) as any).m ?? -1;
+        const secType = ["richtext", "video", "pdf", "slides"].includes(type) ? type : "richtext";
+        const secSize = ["small", "medium", "large", "full"].includes(size) ? size : "large";
         db.query(
-          "INSERT INTO sections (id, document_id, title, content, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-        ).run(id, docId, title, content || "", maxOrder + 1, now, now);
-        addAuditLog(docId, user.id, "section_create", `Created section "${title}"`);
-        return json({ id, title, content: content || "", sortOrder: maxOrder + 1 }, 201);
+          "INSERT INTO sections (id, document_id, title, content, type, url, original_url, size, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(id, docId, title, content || "", secType, url || null, originalUrl || null, secSize, maxOrder + 1, now, now);
+        addAuditLog(docId, user.id, "section_create", `Created ${secType} section "${title}"`);
+        return json({ id, title, content: content || "", type: secType, url: url || null, originalUrl: originalUrl || null, size: secSize, sortOrder: maxOrder + 1 }, 201);
       },
     },
 
@@ -523,17 +664,21 @@ const server = serve({
         const body = await readBody(req);
         const title = body.title ?? sec.title;
         const content = body.content !== undefined ? body.content : sec.content;
+        const type = body.type !== undefined ? (["richtext", "video", "pdf", "slides"].includes(body.type) ? body.type : sec.type) : sec.type;
+        const url = body.url !== undefined ? body.url : sec.url;
+        const originalUrl = body.originalUrl !== undefined ? body.originalUrl : sec.original_url;
+        const size = body.size !== undefined ? (["small", "medium", "large", "full"].includes(body.size) ? body.size : sec.size || "large") : sec.size || "large";
         const sortOrder = body.sort_order ?? sec.sort_order;
 
-        if (body.title !== undefined || body.content !== undefined) {
+        if (body.title !== undefined || body.content !== undefined || body.type !== undefined || body.url !== undefined || body.originalUrl !== undefined) {
           db.query(
-            "INSERT INTO section_versions (id, section_id, title, content, edited_by, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-          ).run(crypto.randomUUID(), id, sec.title, sec.content, user.id, new Date().toISOString());
+            "INSERT INTO section_versions (id, section_id, title, content, type, url, original_url, edited_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).run(crypto.randomUUID(), id, sec.title, sec.content, sec.type || "richtext", sec.url ?? null, sec.original_url ?? null, user.id, new Date().toISOString());
         }
 
         const now = new Date().toISOString();
-        db.query("UPDATE sections SET title = ?, content = ?, sort_order = ?, updated_at = ? WHERE id = ?").run(title, content, sortOrder, now, id);
-        addAuditLog(sec.document_id, user.id, "section_update", `Updated section "${title}"`);
+        db.query("UPDATE sections SET title = ?, content = ?, type = ?, url = ?, original_url = ?, size = ?, sort_order = ?, updated_at = ? WHERE id = ?").run(title, content, type, url, originalUrl, size, sortOrder, now, id);
+        addAuditLog(sec.document_id, user.id, "section_update", `Updated ${type} section "${title}"`);
         return json({ ok: true });
       },
 
@@ -546,6 +691,35 @@ const server = serve({
         db.query("DELETE FROM sections WHERE id = ?").run(id);
         addAuditLog(sec.document_id, user.id, "section_delete", `Deleted section "${sec.title}"`);
         return json({ ok: true });
+      },
+    },
+
+    // ─── Section Progress (video resume etc.) ────────────────
+
+    "/api/sections/:id/progress": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        const row = db.query(
+          "SELECT position_seconds FROM section_progress WHERE user_id = ? AND section_id = ?"
+        ).get(user.id, id) as any;
+        return json({ seconds: row?.position_seconds ?? 0 });
+      },
+
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { id } = req.params;
+        const { seconds } = await readBody(req);
+        const sec = db.query("SELECT id FROM sections WHERE id = ?").get(id);
+        if (!sec) return notFound();
+        const pos = Number.isFinite(seconds) ? Math.max(0, Number(seconds) || 0) : 0;
+        db.query(
+          `INSERT INTO section_progress (user_id, section_id, position_seconds, updated_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT (user_id, section_id) DO UPDATE SET position_seconds = excluded.position_seconds, updated_at = excluded.updated_at`
+        ).run(user.id, id, pos, new Date().toISOString());
+        return json({ ok: true, seconds: pos });
       },
     },
 
@@ -641,7 +815,7 @@ const server = serve({
             sortOrder: doc.sort_order,
             archived: !!doc.archived,
             dueDate: doc.due_date,
-            sections: sections.map((s: any) => ({ id: s.id, title: s.title, content: s.content, sortOrder: s.sort_order })),
+            sections: sections.map((s: any) => ({ id: s.id, title: s.title, content: s.content, type: s.type || "richtext", url: s.url ?? null, originalUrl: s.original_url ?? null, size: s.size || "large", sortOrder: s.sort_order })),
           };
         });
         return json({ documents, sections: [] });
@@ -793,6 +967,9 @@ const server = serve({
           sectionId: v.section_id,
           title: v.title,
           content: v.content,
+          type: v.type || "richtext",
+          url: v.url ?? null,
+          originalUrl: v.original_url ?? null,
           editedBy: v.edited_by,
           editorName: v.editor_name,
           createdAt: v.created_at,
@@ -810,7 +987,7 @@ const server = serve({
         if (!version) return notFound();
         const section = db.query("SELECT * FROM sections WHERE id = ?").get(id) as any;
         if (!section) return notFound();
-        db.query("UPDATE sections SET title = ?, content = ?, updated_at = ? WHERE id = ?").run(version.title, version.content, new Date().toISOString(), id);
+        db.query("UPDATE sections SET title = ?, content = ?, type = ?, url = ?, original_url = ?, updated_at = ? WHERE id = ?").run(version.title, version.content, version.type || "richtext", version.url ?? null, version.original_url ?? null, new Date().toISOString(), id);
         addAuditLog(section.document_id, user.id, "section_restore", `Restored "${version.title}" to version from ${new Date(version.created_at).toLocaleDateString()}`);
         return json({ ok: true });
       },
@@ -865,13 +1042,15 @@ const server = serve({
         if (data.sections) {
           for (const sec of data.sections) {
             const existing = db.query("SELECT id FROM sections WHERE id = ?").get(sec.id);
+            const secType = ["richtext", "video", "pdf", "slides"].includes(sec.type) ? sec.type : "richtext";
+            const secSize = ["small", "medium", "large", "full"].includes(sec.size) ? sec.size : "large";
             if (existing) {
-              db.query("UPDATE sections SET title = ?, content = ?, sort_order = ?, updated_at = ? WHERE id = ?").run(
-                sec.title, sec.content, sec.sort_order ?? 0, sec.updated_at ?? new Date().toISOString(), sec.id
+              db.query("UPDATE sections SET title = ?, content = ?, type = ?, url = ?, original_url = ?, size = ?, sort_order = ?, updated_at = ? WHERE id = ?").run(
+                sec.title, sec.content ?? "", secType, sec.url ?? null, sec.original_url ?? sec.originalUrl ?? null, secSize, sec.sort_order ?? 0, sec.updated_at ?? new Date().toISOString(), sec.id
               );
             } else {
-              db.query("INSERT OR IGNORE INTO sections (id, document_id, title, content, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-                sec.id, sec.document_id, sec.title, sec.content, sec.sort_order ?? 0, sec.created_at ?? new Date().toISOString(), sec.updated_at ?? new Date().toISOString()
+              db.query("INSERT OR IGNORE INTO sections (id, document_id, title, content, type, url, original_url, size, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+                sec.id, sec.document_id, sec.title, sec.content ?? "", secType, sec.url ?? null, sec.original_url ?? sec.originalUrl ?? null, secSize, sec.sort_order ?? 0, sec.created_at ?? new Date().toISOString(), sec.updated_at ?? new Date().toISOString()
               );
             }
           }
@@ -1358,6 +1537,7 @@ const server = serve({
           ".gif": "image/gif",
           ".webp": "image/webp",
           ".svg": "image/svg+xml",
+          ".mjs": "application/javascript",
         };
         return new Response(data, {
           headers: {
@@ -1381,18 +1561,35 @@ const server = serve({
         if (!existsSync(filePath)) {
           return notFound();
         }
-        const data = readFileSync(filePath);
+        const file = Bun.file(filePath);
         const ext = extname(filename).toLowerCase();
-        const mimeTypes: Record<string, string> = {
-          ".jpg": "image/jpeg",
-          ".jpeg": "image/jpeg",
-          ".png": "image/png",
-          ".gif": "image/gif",
-          ".webp": "image/webp",
-        };
-        return new Response(data, {
+        const mime = UPLOAD_MIME[ext] || "application/octet-stream";
+        const rangeHeader = req.headers.get("range");
+
+        if (rangeHeader) {
+          const range = parseRange(rangeHeader, file.size);
+          if (!range) {
+            return new Response(null, {
+              status: 416,
+              headers: { "Content-Range": `bytes */${file.size}` },
+            });
+          }
+          const blob = file.slice(range.start, range.end + 1);
+          return new Response(blob, {
+            status: 206,
+            headers: {
+              "Content-Type": mime,
+              "Content-Range": `bytes ${range.start}-${range.end}/${file.size}`,
+              "Accept-Ranges": "bytes",
+              "Cache-Control": "public, max-age=86400",
+            },
+          });
+        }
+
+        return new Response(file, {
           headers: {
-            "Content-Type": mimeTypes[ext] || "application/octet-stream",
+            "Content-Type": mime,
+            "Accept-Ranges": "bytes",
             "Cache-Control": "public, max-age=86400",
           },
         });

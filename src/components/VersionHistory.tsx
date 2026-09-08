@@ -1,7 +1,45 @@
 import { useState, useEffect } from "react";
-import { History, X, ChevronDown, RotateCcw, GitCompare, Check } from "lucide-react";
+import { History, X, ChevronDown, RotateCcw, GitCompare, Check, Video, FileText, Presentation, Download } from "lucide-react";
 import { getSectionVersions, restoreSectionVersion, type SectionVersion } from "@/api";
 import { cn } from "@/lib/utils";
+
+const TYPE_META: Record<string, { label: string; Icon: React.ComponentType<{ className?: string }> }> = {
+  video: { label: "Video", Icon: Video },
+  pdf: { label: "PDF", Icon: FileText },
+  slides: { label: "Presentation", Icon: Presentation },
+};
+
+function VersionBody({ version }: { version: SectionVersion }) {
+  const meta = version.type && TYPE_META[version.type];
+  if (!meta) {
+    return <div dangerouslySetInnerHTML={{ __html: version.content || "" }} />;
+  }
+  const { Icon } = meta;
+  const url = version.type === "slides" ? version.originalUrl || version.url : version.url;
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-sf-cream dark:bg-slate-700 text-[11px] font-semibold text-sf-brown dark:text-sf-gold border border-sf-cream-dark dark:border-slate-600">
+        <Icon className="w-3 h-3" />
+        {meta.label} section
+      </span>
+      {url ? (
+        <>
+          <span className="text-xs text-slate-500 dark:text-slate-400 break-all">{url}</span>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-sf-brown dark:text-sf-gold rounded-md border border-sf-cream-dark dark:border-slate-600 hover:bg-sf-cream dark:hover:bg-slate-700 transition-colors"
+          >
+            <Download className="w-3 h-3" /> Open
+          </a>
+        </>
+      ) : (
+        <span className="text-xs text-slate-400">No media attached in this version.</span>
+      )}
+    </div>
+  );
+}
 
 interface VersionHistoryProps {
   sectionId: string;
@@ -100,7 +138,7 @@ export function VersionHistory({ sectionId, onClose, onRestored }: VersionHistor
                       </p>
                     </div>
                     <div className="p-3 text-xs text-slate-600 dark:text-slate-300 max-h-60 overflow-y-auto prose prose-xs dark:prose-invert">
-                      <div dangerouslySetInnerHTML={{ __html: v.content }} />
+                      <VersionBody version={v} />
                     </div>
                   </div>
                 ))}
@@ -170,7 +208,7 @@ export function VersionHistory({ sectionId, onClose, onRestored }: VersionHistor
                   {!compareMode && expandedId === v.id && (
                     <div className="px-3 pb-3 border-t border-sf-cream-dark dark:border-slate-700 pt-2">
                       <div className="bg-sf-cream dark:bg-slate-800 rounded-lg p-3 text-sm text-slate-600 dark:text-slate-300 max-h-40 overflow-y-auto">
-                        <div dangerouslySetInnerHTML={{ __html: v.content }} />
+                        <VersionBody version={v} />
                       </div>
                     </div>
                   )}

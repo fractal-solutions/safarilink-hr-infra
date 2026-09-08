@@ -1,4 +1,4 @@
-import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner } from "@/types";
+import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner, SectionType, SectionSize } from "@/types";
 
 const API_BASE = "/api";
 
@@ -184,6 +184,34 @@ export async function uploadFile(file: File): Promise<{ url: string } | null> {
   }
 }
 
+export type MediaKind = "video" | "pdf" | "ppt";
+
+export interface MediaUploadResult {
+  url: string | null;
+  originalUrl: string | null;
+  converted: boolean;
+}
+
+export async function uploadMedia(file: File, kind: MediaKind): Promise<MediaUploadResult | null> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("kind", kind);
+  try {
+    const res = await fetch(`${API_BASE}/media-upload`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || `Upload failed: ${res.status}`);
+    }
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 // Documents
 export async function getDocuments(archived?: boolean): Promise<PolicyDocument[]> {
   const q = qs({ archived });
@@ -231,17 +259,40 @@ export async function reorderDocuments(order: { id: string; sort_order: number }
 }
 
 // Sections
-export async function createSection(docId: string, title: string, content: string): Promise<PolicyDocument | null> {
+export interface SectionInput {
+  title: string;
+  type?: SectionType;
+  content?: string;
+  url?: string | null;
+  originalUrl?: string | null;
+  size?: SectionSize;
+}
+
+export async function createSection(docId: string, input: SectionInput): Promise<PolicyDocument | null> {
   return request<PolicyDocument>(`/documents/${docId}/sections`, {
     method: "POST",
-    body: JSON.stringify({ title, content }),
+    body: JSON.stringify(input),
   });
 }
 
-export async function updateSection(id: string, data: Partial<{ title: string; content: string }>): Promise<boolean> {
+export async function updateSection(id: string, data: Partial<SectionInput>): Promise<boolean> {
   const res = await request(`/sections/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
+  });
+  return res !== null;
+}
+
+// Section media progress (video resume)
+export async function getSectionProgress(sectionId: string): Promise<number> {
+  const res = await request<{ seconds: number }>(`/sections/${sectionId}/progress`);
+  return res?.seconds ?? 0;
+}
+
+export async function saveSectionProgress(sectionId: string, seconds: number): Promise<boolean> {
+  const res = await request(`/sections/${sectionId}/progress`, {
+    method: "PUT",
+    body: JSON.stringify({ seconds }),
   });
   return res !== null;
 }
@@ -332,6 +383,9 @@ export interface SectionVersion {
   sectionId: string;
   title: string;
   content: string;
+  type: SectionType;
+  url: string | null;
+  originalUrl: string | null;
   editedBy: string;
   editorName: string;
   createdAt: string;

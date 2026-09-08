@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import type { PolicyDocument, User, Department } from "@/types";
+import type { SectionFormValues } from "@/components/SectionFormModal";
 import * as api from "@/api";
 import { getSession, logout } from "@/auth";
 import { cn } from "@/lib/utils";
@@ -215,9 +216,16 @@ function AppInner() {
   );
 
   const handleCreateSection = useCallback(
-    async (title: string, content: string) => {
+    async (values: SectionFormValues) => {
       if (!activeDocId) return;
-      await api.createSection(activeDocId, title, content);
+      await api.createSection(activeDocId, {
+        title: values.title,
+        type: values.type,
+        content: values.content,
+        url: values.url,
+        originalUrl: values.originalUrl,
+        size: values.size,
+      });
       await loadDocs();
       setShowNewSection(false);
       toast("Section added", "success");
@@ -230,9 +238,16 @@ function AppInner() {
   }, []);
 
   const handleSaveEdit = useCallback(
-    async (title: string, content: string) => {
+    async (values: SectionFormValues) => {
       if (!editingSectionId) return;
-      const ok = await api.updateSection(editingSectionId, { title, content });
+      const ok = await api.updateSection(editingSectionId, {
+        title: values.title,
+        type: values.type,
+        content: values.content,
+        url: values.url,
+        originalUrl: values.originalUrl,
+        size: values.size,
+      });
       if (ok) {
         await loadDocs();
         setEditingSectionId(null);
@@ -242,6 +257,16 @@ function AppInner() {
       }
     },
     [editingSectionId, loadDocs, toast]
+  );
+
+  const handleMarkCompleted = useCallback(
+    async (sectionId: string) => {
+      if (tracking[sectionId]) return;
+      await api.toggleRead(sectionId, true);
+      setTracking((prev) => ({ ...prev, [sectionId]: true }));
+      toast("Video completed — section marked as read", "success");
+    },
+    [tracking, toast]
   );
 
   const handleReorder = useCallback(
@@ -340,7 +365,11 @@ function AppInner() {
         onClose={() => setEditingSectionId(null)}
         onSave={handleSaveEdit}
         initialTitle={editingSection?.title ?? ""}
+        initialType={editingSection?.type ?? "richtext"}
         initialContent={editingSection?.content ?? ""}
+        initialUrl={editingSection?.url ?? null}
+        initialOriginalUrl={editingSection?.originalUrl ?? null}
+        initialSize={editingSection?.size ?? "large"}
       />
       {versionSectionId && (
         <VersionHistory
@@ -671,6 +700,7 @@ function AppInner() {
                     tracking={tracking}
                     activeUserId={user.id}
                     onToggleRead={handleToggleRead}
+                    onMarkCompleted={handleMarkCompleted}
                     onEditSection={handleEditSection}
                     onViewVersions={(id) => setVersionSectionId(id)}
                   />

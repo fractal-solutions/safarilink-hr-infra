@@ -38,17 +38,27 @@ export function PdfExport({ document: doc }: PdfExportProps) {
           .content ol { list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0; }
           .content li { margin: 0.25em 0; }
           .content mark { background-color: #fef08a; border-radius: 0.15em; padding: 0.1em 0.2em; }
+          .media-note { font-size: 0.8rem; color: #64748b; font-style: italic; padding: 0.5rem 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; }
           .meta { font-size: 0.75rem; color: #94a3b8; margin-top: 2rem; }
         </style>
       </head>
       <body>
         <h1>${doc.title}</h1>
-        ${doc.sections.map(sec => `
-          <div class="section">
-            <h2>${sec.title}</h2>
-            <div class="content">${sec.content}</div>
-          </div>
-        `).join("")}
+        ${doc.sections.map(sec => {
+          const isRichtext = !sec.type || sec.type === "richtext";
+          const label = sec.type === "video" ? "Video"
+            : sec.type === "pdf" ? "PDF"
+            : sec.type === "slides" ? "Presentation"
+            : null;
+          return `
+            <div class="section">
+              <h2>${sec.title}</h2>
+              ${isRichtext
+                ? `<div class="content">${sec.content || ""}</div>`
+                : `<div class="media-note">This section contains a ${label}. Open it in the policy manual to view or download the file.</div>`}
+            </div>
+          `;
+        }).join("")}
         <p class="meta">Generated on ${new Date().toLocaleDateString()} | Safarilink HR Compliance Portal</p>
       </body>
       </html>

@@ -49,6 +49,7 @@ const GRID_SIZE_CLASSES: Record<string, string> = {
   large: "sm:col-span-2 sm:row-span-2",
   xlarge: "sm:col-span-3 sm:row-span-2",
   "tall-3": "sm:row-span-3",
+  "tallwide": "sm:col-span-2 sm:row-span-3",
   "tall-4": "sm:row-span-4",
   hero: "sm:col-span-3",
   "hero-3": "sm:col-span-3 sm:row-span-3",
@@ -71,6 +72,82 @@ const PRESET_GRADIENTS = [
 ];
 
 const EMOJI_PRESETS = ["📢", "🚨", "⏰", "📋", "🎯", "⚡", "🔥", "💡", "📌", "🎉", "⚠️", "✅", "🏢", "📊", "🤝", "💼", "🗓️", "📧"];
+
+interface GridPreset {
+  value: string;
+  label: string;
+  cols: number;
+  rows: number;
+}
+
+const GRID_PRESETS: GridPreset[] = [
+  { value: "small", label: "Small", cols: 1, rows: 1 },
+  { value: "medium", label: "Medium", cols: 1, rows: 1 },
+  { value: "wide", label: "Wide", cols: 2, rows: 1 },
+  { value: "tall", label: "Tall", cols: 1, rows: 2 },
+  { value: "hero", label: "Hero", cols: 3, rows: 1 },
+  { value: "large", label: "Large", cols: 2, rows: 2 },
+  { value: "xlarge", label: "X-Large", cols: 3, rows: 2 },
+  { value: "tall-3", label: "Tall 3", cols: 1, rows: 3 },
+  { value: "tallwide", label: "Tall Wide", cols: 2, rows: 3 },
+  { value: "tall-4", label: "Tall 4", cols: 1, rows: 4 },
+  { value: "hero-3", label: "Hero 3", cols: 3, rows: 3 },
+  { value: "hero-4", label: "Hero 4", cols: 3, rows: 4 },
+];
+
+function MiniMosaic({ cols, rows }: { cols: number; rows: number }) {
+  return (
+    <div className="w-[57px] h-[44px] grid grid-cols-3 grid-rows-4 gap-[2px] p-[2px] rounded-md bg-slate-100 dark:bg-slate-700/40">
+      {Array.from({ length: 12 }).map((_, i) => {
+        const r = Math.floor(i / 3);
+        const c = i % 3;
+        const active = c < cols && r < rows;
+        return (
+          <span
+            key={i}
+            className={cn(
+              "rounded-[1.5px] transition-colors",
+              active ? "bg-sf-gold shadow-[0_0_4px_rgba(200,169,81,0.5)]" : "bg-slate-200/80 dark:bg-slate-600/60"
+            )}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function GridSizePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="rounded-xl border border-sf-cream-dark dark:border-slate-600 bg-sf-cream/50 dark:bg-slate-900/40 p-2.5">
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+        {GRID_PRESETS.map((p) => {
+          const active = value === p.value;
+          return (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => onChange(p.value)}
+              className={cn(
+                "flex flex-col items-center gap-1 px-1 py-2 rounded-lg border transition-all",
+                active
+                  ? "border-sf-gold bg-sf-gold/10 dark:bg-sf-gold/10 ring-1 ring-sf-gold/40"
+                  : "border-transparent hover:border-sf-cream-dark dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-800"
+              )}
+            >
+              <MiniMosaic cols={p.cols} rows={p.rows} />
+              <span className={cn("text-[10px] font-bold leading-none", active ? "text-sf-brown dark:text-sf-gold" : "text-slate-600 dark:text-slate-300")}>
+                {p.label}
+              </span>
+              <span className={cn("text-[9px] leading-none tabular-nums", active ? "text-sf-brown/60 dark:text-sf-gold/60" : "text-slate-400 dark:text-slate-500")}>
+                {p.cols} × {p.rows}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function BulletinBoard({ isAdmin, departments, documents, onSelectDepartment, onSelectDoc }: BulletinBoardProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -575,7 +652,7 @@ function AnnouncementEditorModal({ announcement, departments, onClose, onSave }:
   const [isPinned, setIsPinned] = useState(announcement?.isPinned ?? false);
   const [imageUrl, setImageUrl] = useState(announcement?.imageUrl ?? "");
   const [emoji, setEmoji] = useState(announcement?.emoji ?? "");
-  const [gridSize, setGridSize] = useState(announcement?.gridSize ?? "medium");
+  const [gridSize, setGridSize] = useState<string>(announcement?.gridSize ?? "medium");
   const [expiresAt, setExpiresAt] = useState(announcement?.expiresAt?.slice(0, 10) ?? "");
   const [sendToWebhook, setSendToWebhook] = useState(announcement?.sendToWebhook ?? false);
   const [saving, setSaving] = useState(false);
@@ -642,21 +719,22 @@ function AnnouncementEditorModal({ announcement, departments, onClose, onSave }:
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Grid2x2 className="w-3 h-3" /> Grid Size</label>
-              <select value={gridSize} onChange={(e) => setGridSize(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm">
-                <option value="small">Small (1x1)</option>
-                <option value="medium">Medium (1x1)</option>
-                <option value="wide">Wide (2x1)</option>
-                <option value="tall">Tall (1x2)</option>
-                <option value="large">Large (2x2)</option>
-                <option value="xlarge">X-Large (3x2)</option>
-                <option value="tall-3">Tall 3 (1x3)</option>
-                <option value="tall-4">Tall 4 (1x4)</option>
-                <option value="hero">Hero (3x1)</option>
-                <option value="hero-3">Hero 3 (3x3)</option>
-                <option value="hero-4">Hero 4 (3x4)</option>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Priority</label>
+              <select value={priority} onChange={(e) => setPriority(Number(e.target.value))} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm">
+                <option value={0}>Normal</option>
+                <option value={1}>High</option>
+                <option value={2}>Urgent</option>
               </select>
             </div>
+          </div>
+
+          {/* Grid Size visual mosaic picker */}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Grid2x2 className="w-3 h-3" /> Grid Size</label>
+            <GridSizePicker value={gridSize} onChange={setGridSize} />
+            <p className="text-[11px] text-slate-400 mt-1.5">
+              Choose how much space this announcement takes on the board. Dark tiles show the cell span.
+            </p>
           </div>
 
           {/* Multi-department checkboxes */}
@@ -673,15 +751,7 @@ function AnnouncementEditorModal({ announcement, departments, onClose, onSave }:
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Priority</label>
-              <select value={priority} onChange={(e) => setPriority(Number(e.target.value))} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm">
-                <option value={0}>Normal</option>
-                <option value={1}>High</option>
-                <option value={2}>Urgent</option>
-              </select>
-            </div>
+          <div className="max-w-[220px]">
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Expires On</label>
               <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" />

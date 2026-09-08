@@ -97,7 +97,7 @@ export function Sidebar({
         return doc.sections.some(
           (s) =>
             s.title.toLowerCase().includes(q) ||
-            s.content.toLowerCase().includes(q)
+            (s.content || "").toLowerCase().includes(q)
         );
       })
     : activeDepartmentId
