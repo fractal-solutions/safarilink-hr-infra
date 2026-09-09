@@ -1,4 +1,4 @@
-import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner, SectionType, SectionSize, AnnouncementDetail, AnnouncementComment, SessionSettings, Course, CourseDetail, CourseSection, CourseSectionType } from "@/types";
+import type { PolicyDocument, User, AuditEntry, Department, Announcement, Banner, SectionType, SectionSize, AnnouncementDetail, AnnouncementComment, SessionSettings, Course, CourseDetail, CourseSection, CourseSectionType, CourseCert } from "@/types";
 
 const API_BASE = "/api";
 
@@ -630,4 +630,69 @@ export async function deleteCourseSection(id: string): Promise<boolean> {
 export async function reorderCourseSections(order: { id: string; sort_order: number }[]): Promise<boolean> {
   const res = await request("/course-sections/reorder", { method: "PUT", body: JSON.stringify({ order }) });
   return res !== null;
+}
+
+export interface AttemptStartResult {
+  attemptId: string;
+  status: string;
+  resumed: boolean;
+}
+
+export interface SubmitAnswer {
+  sectionId: string;
+  questionIndex: number;
+  answer: string;
+}
+
+export async function startCourseAttempt(courseId: string): Promise<AttemptStartResult | null> {
+  return request<AttemptStartResult>(`/courses/${courseId}/attempts`, { method: "POST" });
+}
+
+export async function submitCourseAttempt(attemptId: string, answers: SubmitAnswer[]): Promise<any | null> {
+  return request(`/attempts/${attemptId}/submit`, {
+    method: "PUT",
+    body: JSON.stringify({ answers }),
+  });
+}
+
+export interface GradeableAnswer {
+  id: string;
+  sectionTitle: string;
+  questionIndex: number;
+  question: string;
+  kind: string;
+  answer: string;
+  points: number | null;
+  maxPoints: number;
+  gradedBy: string | null;
+}
+
+export interface GradingAttempt {
+  attemptId: string;
+  userId: string;
+  userName: string;
+  status: string;
+  submittedAt: string | null;
+  gradedAt: string | null;
+  finalPct: number | null;
+  openPending: number;
+  earned: number;
+  max: number;
+  answers: GradeableAnswer[];
+}
+
+export async function getCourseGrading(courseId: string): Promise<GradingAttempt[]> {
+  return (await request<GradingAttempt[]>(`/courses/${courseId}/grading`)) ?? [];
+}
+
+export async function gradeOpenAnswer(answerId: string, points: number): Promise<any | null> {
+  return request(`/answers/${answerId}/grade`, { method: "PUT", body: JSON.stringify({ points }) });
+}
+
+export async function getMyCertificates(): Promise<CourseCert[]> {
+  return (await request<CourseCert[]>("/me/certificates")) ?? [];
+}
+
+export async function rateCourse(courseId: string, stars: number, comment?: string): Promise<{ ok: boolean; stars?: number } | null> {
+  return request(`/courses/${courseId}/rating`, { method: "POST", body: JSON.stringify({ stars, comment: comment || "" }) });
 }

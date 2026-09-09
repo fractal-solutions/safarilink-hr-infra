@@ -33,9 +33,56 @@ export interface Course {
   tiers: CourseTier[];
   expiryMonths: number | null;
   sectionCount: number;
+  ratingAvg?: number;
+  ratingCount?: number;
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface QuizOption {
+  id: string;
+  text: string;
+  correct: boolean;
+}
+
+export interface QuizQuestion {
+  id: string;
+  text: string;
+  imageUrl?: string;
+  type: "mcq" | "open";
+  points: number;
+  options?: QuizOption[];
+}
+
+export interface QuizSectionPayload {
+  questions: QuizQuestion[];
+}
+
+export type AttemptStatus = "in_progress" | "submitted" | "graded";
+
+export interface CourseAttemptSummary {
+  id: string;
+  status: AttemptStatus;
+  submittedAt: string | null;
+  gradedAt: string | null;
+  autoPct: number | null;
+  finalPct: number | null;
+}
+
+export interface CourseCert {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  tierTitle: string;
+  pct: number;
+  issuedAt: string;
+  expiresAt: string | null;
+}
+
+export interface CourseRating {
+  stars: number;
+  comment: string;
 }
 
 export interface CourseSection {
@@ -50,6 +97,9 @@ export interface CourseSection {
 
 export interface CourseDetail extends Course {
   sections: CourseSection[];
+  myRating?: CourseRating | null;
+  myAttempts?: CourseAttemptSummary[];
+  myCert?: { id: string; tierTitle: string; pct: number; issuedAt: string; expiresAt: string | null } | null;
 }
 
 export interface Section {

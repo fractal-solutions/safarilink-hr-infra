@@ -449,6 +449,7 @@ function AppInner() {
         <TrainingView
           isAdmin={isAdmin}
           userId={user.id}
+          displayName={user.displayName}
           currentRole={user.role}
           departments={departments}
         />

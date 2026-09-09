@@ -119,6 +119,94 @@ function userCanSeeCourse(user: any, courseDepartmentId: string | null): boolean
   return userDept.includes(courseDepartmentId);
 }
 
+function parseQuizContent(content: string): any[] {
+  try {
+    const data = JSON.parse(content || "{}");
+    return Array.isArray(data.questions) ? data.questions : [];
+  } catch {
+    return [];
+  }
+}
+
+function addMonths(iso: string, months: number): string {
+  const d = new Date(iso);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString();
+}
+
+function courseTierFor(course: any, pct: number): { index: number; title: string } | null {
+  let tiers: any[] = [];
+  try { tiers = JSON.parse(course.tiers || "[]"); } catch { tiers = []; }
+  const sorted = [...tiers].filter((t) => Number.isFinite(Number(t.min))).sort((a, b) => Number(b.min) - Number(a.min));
+  for (const t of sorted) {
+    if (pct >= Number(t.min)) return { index: sorted.indexOf(t), title: t.title || "Pass" };
+  }
+  return null;
+}
+
+function attemptSummary(attemptId: string) {
+  const attempt = db.query("SELECT * FROM course_attempts WHERE id = ?").get(attemptId) as any;
+  if (!attempt) return null;
+  const answers = db.query("SELECT * FROM course_attempt_answers WHERE attempt_id = ?").all(attemptId) as any[];
+  const openPending = answers.filter((a: any) => a.kind === "open" && a.points === null).length;
+  let earned = 0;
+  let max = 0;
+  for (const a of answers) {
+    const mp = Number(a.max_points) || 0;
+    max += mp;
+    if (a.points !== null) earned += Number(a.points) || 0;
+  }
+  const finalPct = max > 0 ? Math.round((earned / max) * 10000) / 100 : 0;
+  return { attempt, answers, earned, max, openPending, finalPct };
+}
+
+function issueCertificateForAttempt(attemptId: string) {
+  const summary = attemptSummary(attemptId);
+  if (!summary) return null;
+  const attempt = summary.attempt;
+  if (attempt.status !== "graded" && summary.openPending === 0) {
+    // already graded set by caller; proceed
+  }
+  const course = db.query("SELECT * FROM courses WHERE id = ?").get(attempt.course_id) as any;
+  if (!course) return null;
+  const pass = summary.finalPct >= (Number(course.passmark_pct) || 60);
+  if (!pass) return null;
+  const tier = courseTierFor(course, summary.finalPct);
+  const now = new Date().toISOString();
+  const expires = course.expiry_months ? addMonths(now, Number(course.expiry_months)) : null;
+  const existing = db.query("SELECT * FROM course_certificates WHERE course_id = ? AND user_id = ?").get(course.id, attempt.user_id) as any;
+  if (!existing) {
+    db.run(
+      `INSERT INTO course_certificates (id, course_id, user_id, attempt_id, tier_index, tier_title, pct, issued_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), course.id, attempt.user_id, attemptId, tier?.index ?? null, tier?.title ?? "Pass", summary.finalPct, now, expires]
+    );
+    return summary.finalPct;
+  }
+  if (summary.finalPct > Number(existing.pct || 0)) {
+    db.run(
+      `UPDATE course_certificates SET attempt_id = ?, tier_index = ?, tier_title = ?, pct = ?, issued_at = ?, expires_at = ? WHERE id = ?`,
+      [attemptId, tier?.index ?? null, tier?.title ?? "Pass", summary.finalPct, now, expires, existing.id]
+    );
+    return summary.finalPct;
+  }
+  return null;
+}
+
+function finalizeAttempt(attemptId: string): any {
+  const summary = attemptSummary(attemptId);
+  if (!summary) return null;
+  const attempt = summary.attempt;
+  const course = db.query("SELECT * FROM courses WHERE id = ?").get(attempt.course_id) as any;
+  const status = summary.openPending === 0 ? "graded" : "submitted";
+  db.run(
+    "UPDATE course_attempts SET status = ?, final_pct = ?, auto_pct = ?, graded_at = ? WHERE id = ?",
+    [status, summary.finalPct, summary.finalPct, status === "graded" ? new Date().toISOString() : attempt.graded_at, attemptId]
+  );
+  if (status === "graded" && course) issueCertificateForAttempt(attemptId);
+  return { summary, status, course };
+}
+
 async function fireWebhook(webhookUrl: string, payload: any) {
   try {
     await fetch(webhookUrl, {
@@ -1098,6 +1186,9 @@ const server = serve({
         const sectionAgg = db.query("SELECT course_id, COUNT(*) AS c FROM course_sections GROUP BY course_id").all() as any[];
         const countMap: Record<string, number> = {};
         for (const s of sectionAgg) countMap[s.course_id] = s.c;
+        const ratingAgg = db.query("SELECT course_id, AVG(stars) AS avg, COUNT(*) AS c FROM course_ratings GROUP BY course_id").all() as any[];
+        const ratingMap: Record<string, { avg: number; count: number }> = {};
+        for (const r of ratingAgg) ratingMap[r.course_id] = { avg: Math.round(Number(r.avg) * 10) / 10, count: r.c };
         return json(filtered.map((c: any) => ({
           id: c.id,
           title: c.title,
@@ -1109,6 +1200,8 @@ const server = serve({
           tiers: (() => { try { return JSON.parse(c.tiers || "[]"); } catch { return []; } })(),
           expiryMonths: c.expiry_months,
           sectionCount: countMap[c.id] || 0,
+          ratingAvg: ratingMap[c.id]?.avg ?? 0,
+          ratingCount: ratingMap[c.id]?.count ?? 0,
           archived: !!c.archived,
           createdAt: c.created_at,
           updatedAt: c.updated_at,
@@ -1164,6 +1257,18 @@ const server = serve({
           archived: !!row.archived,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
+          ratingAvg: (() => { const r = db.query("SELECT AVG(stars) AS avg FROM course_ratings WHERE course_id = ?").get(id) as any; return r?.avg ? Math.round(Number(r.avg) * 10) / 10 : 0; })(),
+          ratingCount: (db.query("SELECT COUNT(*) AS c FROM course_ratings WHERE course_id = ?").get(id) as any).c,
+          myRating: (db.query("SELECT stars, comment FROM course_ratings WHERE course_id = ? AND user_id = ?").get(id, user.id) as any) ?? null,
+          myAttempts: (db.query(
+            `SELECT id, status, submitted_at, graded_at, auto_pct, final_pct FROM course_attempts WHERE course_id = ? AND user_id = ? ORDER BY started_at DESC`
+          ).all(id, user.id) as any[]).map((a: any) => ({
+            id: a.id, status: a.status, submittedAt: a.submitted_at, gradedAt: a.graded_at,
+            autoPct: a.auto_pct, finalPct: a.final_pct,
+          })),
+          myCert: (db.query(
+            `SELECT id, tier_title, pct, issued_at, expires_at FROM course_certificates WHERE course_id = ? AND user_id = ?`
+          ).get(id, user.id) as any) ?? null,
           sections: sections.map((s: any) => ({
             id: s.id, title: s.title, type: s.type || "richtext", content: s.content || "",
             url: s.url ?? null, originalUrl: s.original_url ?? null, size: s.size || "large", sortOrder: s.sort_order,
@@ -1274,6 +1379,177 @@ const server = serve({
           db.query("UPDATE course_sections SET sort_order = ? WHERE id = ?").run(item.sort_order, item.id);
         }
         return json({ ok: true });
+      },
+    },
+
+    // ─── Course Attempts (assessments) ───────────────────────
+
+    "/api/courses/:courseId/attempts": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { courseId } = req.params;
+        const course = db.query("SELECT * FROM courses WHERE id = ?").get(courseId) as any;
+        if (!course) return notFound();
+        if (!userCanSeeCourse(user, course.department_id)) return forbidden();
+        // Resume any in-progress attempt, otherwise start a new one
+        const existing = db.query("SELECT id FROM course_attempts WHERE course_id = ? AND user_id = ? AND status = 'in_progress' ORDER BY started_at DESC").get(courseId, user.id) as any;
+        if (existing) return json({ attemptId: existing.id, status: "in_progress", resumed: true }, 201);
+        const attemptId = `att-${crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+        db.run(
+          "INSERT INTO course_attempts (id, course_id, user_id, started_at, status) VALUES (?, ?, ?, ?, 'in_progress')",
+          [attemptId, courseId, user.id, now]
+        );
+        return json({ attemptId, status: "in_progress", resumed: false }, 201);
+      },
+    },
+
+    "/api/attempts/:attemptId/submit": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { attemptId } = req.params;
+        const attempt = db.query("SELECT * FROM course_attempts WHERE id = ?").get(attemptId) as any;
+        if (!attempt) return notFound();
+        if (attempt.user_id !== user.id) return forbidden();
+        if (attempt.status !== "in_progress") return json({ error: "Attempt already submitted" }, 400);
+        const { answers } = await readBody(req);
+        const sections = db.query("SELECT * FROM course_sections WHERE course_id = ? AND type = 'quiz' ORDER BY sort_order").all(attempt.course_id) as any[];
+        if (sections.length === 0) return json({ error: "No quiz sections in this course" }, 400);
+
+        const now = new Date().toISOString();
+        for (const sec of sections) {
+          const questions = parseQuizContent(sec.content);
+          questions.forEach((q: any, qi: number) => {
+            const payload = Array.isArray(answers) ? answers.find((a: any) => a.sectionId === sec.id && a.questionIndex === qi) : undefined;
+            const kind = q.type === "open" ? "open" : "mcq";
+            let answer = payload?.answer ?? "";
+            let correct: number | null = null;
+            let points: number | null = null;
+            const maxPoints = Number(q.points) || 1;
+            if (kind === "mcq") {
+              const chosen = Array.isArray(q.options) ? q.options.find((o: any) => String(o.id) === String(answer)) : undefined;
+              correct = chosen?.correct ? 1 : 0;
+              points = chosen?.correct ? maxPoints : 0;
+              answer = String(answer ?? "");
+            }
+            db.run(
+              "INSERT INTO course_attempt_answers (id, attempt_id, section_id, question_index, kind, answer, correct, points, max_points) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              [crypto.randomUUID(), attemptId, sec.id, qi, kind, answer, correct, points, maxPoints]
+            );
+          });
+        }
+        db.run("UPDATE course_attempts SET submitted_at = ?, status = 'submitted' WHERE id = ?", [now, attemptId]);
+        const res = finalizeAttempt(attemptId);
+        return json({ attemptId, ...res });
+      },
+    },
+
+    "/api/courses/:courseId/grading": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { courseId } = req.params;
+        const course = db.query("SELECT * FROM courses WHERE id = ?").get(courseId) as any;
+        if (!course) return notFound();
+        const attempts = db.query(
+          `SELECT a.*, u.display_name AS user_name FROM course_attempts a LEFT JOIN users u ON u.id = a.user_id
+           WHERE a.course_id = ? ORDER BY a.started_at DESC`
+        ).all(courseId) as any[];
+        return json(attempts.map((a: any) => {
+          const summary = attemptSummary(a.id);
+          const answers = (summary?.answers ?? []).map((ans: any) => {
+            const secTitleRow = db.query("SELECT title FROM course_sections WHERE id = ?").get(ans.section_id) as any;
+            const sec = db.query("SELECT content FROM course_sections WHERE id = ?").get(ans.section_id) as any;
+            const questions = sec ? parseQuizContent(sec.content) : [];
+            const q = questions[ans.question_index] ?? null;
+            return {
+              id: ans.id,
+              sectionTitle: secTitleRow?.title ?? "",
+              questionIndex: ans.question_index,
+              question: q ? (q.text ?? "") : "",
+              kind: ans.kind,
+              answer: ans.answer,
+              points: ans.points,
+              maxPoints: ans.max_points,
+              gradedBy: ans.graded_by,
+            };
+          });
+          return {
+            attemptId: a.id,
+            userId: a.user_id,
+            userName: a.user_name || "Unknown",
+            status: a.status,
+            submittedAt: a.submitted_at,
+            gradedAt: a.graded_at,
+            finalPct: a.final_pct,
+            openPending: summary?.openPending ?? 0,
+            earned: summary?.earned ?? 0,
+            max: summary?.max ?? 0,
+            answers,
+          };
+        }));
+      },
+    },
+
+    "/api/answers/:answerId/grade": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { answerId } = req.params;
+        const answer = db.query("SELECT * FROM course_attempt_answers WHERE id = ?").get(answerId) as any;
+        if (!answer) return notFound();
+        const { points } = await readBody(req);
+        const val = Math.max(0, Math.min(Number(answer.max_points) || 1, Number(points) || 0));
+        db.run("UPDATE course_attempt_answers SET points = ?, graded_by = ?, graded_at = ? WHERE id = ?", [val, user.id, new Date().toISOString(), answerId]);
+        const res = finalizeAttempt(answer.attempt_id);
+        return json({ ok: true, points: val, ...res });
+      },
+    },
+
+    // ─── Course Certificates & Ratings ───────────────────────
+
+    "/api/me/certificates": {
+      async GET(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const rows = db.query(
+          `SELECT c.*, cr.title AS course_title, cr.passmark_pct, cr.expiry_months
+           FROM course_certificates c JOIN courses cr ON cr.id = c.course_id
+           WHERE c.user_id = ? ORDER BY c.issued_at DESC`
+        ).all(user.id) as any[];
+        return json(rows.map((c: any) => ({
+          id: c.id,
+          courseId: c.course_id,
+          courseTitle: c.course_title,
+          tierTitle: c.tier_title,
+          pct: c.pct,
+          issuedAt: c.issued_at,
+          expiresAt: c.expires_at,
+        })));
+      },
+    },
+
+    "/api/courses/:courseId/rating": {
+      async POST(req) {
+        const user = getSessionUser(req);
+        if (!user) return unauthorized();
+        const { courseId } = req.params;
+        const course = db.query("SELECT * FROM courses WHERE id = ?").get(courseId) as any;
+        if (!course) return notFound();
+        if (!userCanSeeCourse(user, course.department_id)) return forbidden();
+        const submitted = db.query("SELECT id FROM course_attempts WHERE course_id = ? AND user_id = ? AND status != 'in_progress'").get(courseId, user.id);
+        if (!submitted) return json({ error: "Submit an attempt before rating this course" }, 400);
+        const { stars, comment } = await readBody(req);
+        const starVal = Math.max(1, Math.min(5, Math.round(Number(stars) || 0)));
+        const now = new Date().toISOString();
+        db.run(
+          `INSERT INTO course_ratings (course_id, user_id, stars, comment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (course_id, user_id) DO UPDATE SET stars = excluded.stars, comment = excluded.comment, updated_at = excluded.updated_at`,
+          [courseId, user.id, starVal, typeof comment === "string" ? comment.slice(0, 1000) : "", now, now]
+        );
+        return json({ ok: true, stars: starVal });
       },
     },
 
