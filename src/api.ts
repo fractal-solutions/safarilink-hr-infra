@@ -586,6 +586,9 @@ export interface CourseInput {
   passmarkPct?: number;
   tiers?: { min: number; title: string }[];
   expiryMonths?: number | null;
+  icon?: string | null;
+  difficulty?: string | null;
+  orderLabel?: string | null;
 }
 
 export async function getCourses(): Promise<Course[]> {
@@ -607,6 +610,11 @@ export async function updateCourse(id: string, data: Partial<CourseInput>): Prom
 
 export async function deleteCourse(id: string): Promise<boolean> {
   const res = await request(`/courses/${id}`, { method: "DELETE" });
+  return res !== null;
+}
+
+export async function reorderCourses(order: { id: string; sort_order: number }[]): Promise<boolean> {
+  const res = await request("/courses/reorder", { method: "PUT", body: JSON.stringify({ order }) });
   return res !== null;
 }
 

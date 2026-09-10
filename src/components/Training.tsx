@@ -58,6 +58,18 @@ const TYPE_ICON: Record<string, { icon: React.ComponentType<{ className?: string
   quiz: { icon: ListChecks, label: "Quiz" },
 };
 
+const DIFFICULTY_OPTIONS = ["Beginner", "Intermediate", "Advanced", "Expert"];
+
+const DIFFICULTY_CLASSES: Record<string, string> = {
+  Beginner: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700",
+  Intermediate: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700",
+  Advanced: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700",
+  Expert: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700",
+  Default: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600",
+};
+
+const ICON_PRESETS = ["🎓", "📘", "🛠️", "🛡️", "✈️", "⚙️", "🧭", "💰", "📊", "🚀", "❤️", "⚠️"];
+
 function parseQuestions(sec: CourseSection | undefined): QuizQuestion[] {
   if (!sec || sec.type !== "quiz") return [];
   try {
@@ -172,13 +184,16 @@ export function TrainingView({ isAdmin, userId, displayName, currentRole, depart
   const answerKey = (sectionId: string, qi: number) => `${sectionId}:${qi}`;
 
   // ── Course CRUD ──────────────────────────────────────────────
-  const handleSaveCourse = async (data: { title: string; description: string; departmentId: string | null; passmarkPct: number; expiryMonths: string }) => {
+  const handleSaveCourse = async (data: { title: string; description: string; departmentId: string | null; passmarkPct: number; expiryMonths: string; icon: string; difficulty: string; orderLabel: string }) => {
     const payload: api.CourseInput = {
       title: data.title,
       description: data.description,
       departmentId: data.departmentId,
       passmarkPct: data.passmarkPct,
       expiryMonths: data.expiryMonths ? Number(data.expiryMonths) : null,
+      icon: data.icon || null,
+      difficulty: data.difficulty || null,
+      orderLabel: data.orderLabel || null,
       tiers: [{ min: Math.max(0, Math.min(100, data.passmarkPct)), title: "Pass" }],
     };
     if (editingCourse) {
@@ -202,6 +217,28 @@ export function TrainingView({ isAdmin, userId, displayName, currentRole, depart
       await loadCourses();
     } else toast("Failed to delete course", "error");
     setConfirmDeleteId(null);
+  };
+
+  const moveCourse = async (index: number, dir: -1 | 1) => {
+    const list = [...courses];
+    const to = index + dir;
+    if (to < 0 || to >= list.length) return;
+    const a = list[index]!;
+    const b = list[to]!;
+    list[index] = b;
+    list[to] = a;
+    setCourses(list);
+    await api.reorderCourses(list.map((c, i) => ({ id: c.id, sort_order: i })));
+  };
+
+  const confirmDeleteCourse = async (course: Course) => {
+    if (!window.confirm(`Delete course "${course.title}"? This cannot be undone.`)) return;
+    const ok = await api.deleteCourse(course.id);
+    if (ok) {
+      toast("Course deleted", "success");
+      if (activeCourseId === course.id) { setActiveCourseId(null); setActiveCourse(null); }
+      await loadCourses();
+    } else toast("Failed to delete course", "error");
   };
 
   // ── Section CRUD ─────────────────────────────────────────────
@@ -246,7 +283,10 @@ export function TrainingView({ isAdmin, userId, displayName, currentRole, depart
     const next = [...activeCourse.sections];
     const to = index + dir;
     if (to < 0 || to >= next.length) return;
-    [next[index], next[to]] = [next[to], next[index]];
+    const a = next[index]!;
+    const b = next[to]!;
+    next[index] = b;
+    next[to] = a;
     setActiveCourse({ ...activeCourse, sections: next });
     await api.reorderCourseSections(next.map((s, i) => ({ id: s.id, sort_order: i })));
   };
@@ -274,7 +314,7 @@ export function TrainingView({ isAdmin, userId, displayName, currentRole, depart
     setSubmitting(true);
     const payload = Object.entries(answers).map(([key, value]) => {
       const [sectionId, qi] = key.split(":");
-      return { sectionId, questionIndex: Number(qi), answer: value };
+      return { sectionId: sectionId as string, questionIndex: Number(qi), answer: value };
     });
     const res = await api.submitCourseAttempt(attemptId, payload);
     setSubmitting(false);
@@ -531,13 +571,17 @@ export function TrainingView({ isAdmin, userId, displayName, currentRole, depart
                       : "bg-white dark:bg-slate-800 border-sf-cream-dark dark:border-slate-700"
                   )}
                 >
-                  <div className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center text-white" style={{ backgroundColor: course.departmentColor || "#5C3A1E" }}>
-                    <GraduationCap className="w-3.5 h-3.5" />
+                  <div className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center text-white text-sm" style={{ backgroundColor: course.departmentColor || "#5C3A1E" }}>
+                    {course.icon ? <span>{course.icon}</span> : <GraduationCap className="w-3.5 h-3.5" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={cn("text-xs font-semibold leading-tight truncate", active ? "text-white" : "text-slate-900 dark:text-slate-100")}>{course.title}</p>
+                    <p className={cn("text-xs font-semibold leading-tight truncate", active ? "text-white" : "text-slate-900 dark:text-slate-100")}>
+                      {course.orderLabel && <span className={cn("mr-1", active ? "text-sf-gold-light" : "text-sf-gold-dark")}>{course.orderLabel}.</span>}
+                      {course.title}
+                    </p>
                     <p className={cn("text-[10px] mt-0.5 truncate", active ? "text-sf-gold-light/80" : "text-slate-400")}>
                       {course.sectionCount} section{course.sectionCount === 1 ? "" : "s"}
+                      {course.difficulty ? ` · ${course.difficulty}` : ""}
                     </p>
                   </div>
                 </button>
@@ -608,30 +652,50 @@ export function TrainingView({ isAdmin, userId, displayName, currentRole, depart
               )}
             </div>
           ) : (
-            visibleCourses.map((course) => {
+            visibleCourses.map((course, index) => {
               const active = activeCourseId === course.id;
               return (
-                <button
+                <div
                   key={course.id}
                   onClick={() => selectCourse(course.id)}
-                  className={cn("w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex items-start gap-2.5",
+                  className={cn("w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex items-start gap-2.5 cursor-pointer group/card",
                     active ? "bg-sf-cream dark:bg-sf-brown/30 border-sf-gold/40 dark:border-sf-gold/30 ring-1 ring-sf-gold/20 shadow-sm" : "bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700/50 hover:bg-sf-cream/50 dark:hover:bg-slate-700/50")}
                 >
-                  <div className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: course.departmentColor || "#5C3A1E" }}>
-                    <GraduationCap className="w-4 h-4" />
+                  <div className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-white shadow-sm text-base" style={{ backgroundColor: course.departmentColor || "#5C3A1E" }}>
+                    {course.icon ? <span>{course.icon}</span> : <GraduationCap className="w-4 h-4" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={cn("text-sm font-semibold leading-tight truncate", active ? "text-sf-brown dark:text-sf-gold-light" : "text-slate-800 dark:text-slate-100")}>{course.title}</p>
-                    <p className="text-[11px] text-slate-400 mt-1 truncate flex items-center gap-1">
-                      {course.sectionCount} section{course.sectionCount === 1 ? "" : "s"}
-                      {course.departmentName ? ` · ${course.departmentName}` : " · All depts"}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {course.orderLabel && (
+                        <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sf-gold/20 text-sf-brown-dark dark:text-sf-gold">{course.orderLabel}</span>
+                      )}
+                      <p className={cn("text-sm font-semibold leading-tight truncate", active ? "text-sf-brown dark:text-sf-gold-light" : "text-slate-800 dark:text-slate-100")}>{course.title}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <span className="text-[11px] text-slate-400">
+                        {course.sectionCount} section{course.sectionCount === 1 ? "" : "s"}
+                        {course.departmentName ? ` · ${course.departmentName}` : " · All depts"}
+                      </span>
+                      {course.difficulty && (
+                        <span className={cn("text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full border", DIFFICULTY_CLASSES[course.difficulty] || DIFFICULTY_CLASSES.Default)}>
+                          {course.difficulty}
+                        </span>
+                      )}
+                    </div>
                     {(course.ratingCount ?? 0) > 0 && (
                       <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1"><Star className="w-3 h-3 text-sf-gold fill-sf-gold" /> {course.ratingAvg} ({course.ratingCount})</p>
                     )}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-300 mt-1 shrink-0" />
-                </button>
+                  {isAdmin ? (
+                    <div className="flex flex-col items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => moveCourse(index, -1)} disabled={index === 0} className="p-1 rounded text-slate-300 hover:text-sf-brown disabled:opacity-30 transition-colors" title="Move up"><ArrowUp className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => moveCourse(index, 1)} disabled={index === visibleCourses.length - 1} className="p-1 rounded text-slate-300 hover:text-sf-brown disabled:opacity-30 transition-colors" title="Move down"><ArrowDown className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => confirmDeleteCourse(course)} className="p-1 rounded text-slate-300 hover:text-red-500 transition-colors" title="Delete course"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-slate-300 mt-1 shrink-0" />
+                  )}
+                </div>
               );
             })
           )}
@@ -655,7 +719,16 @@ export function TrainingView({ isAdmin, userId, displayName, currentRole, depart
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
+                    {activeCourse.icon && <span className="text-2xl leading-none">{activeCourse.icon}</span>}
+                    {activeCourse.orderLabel && (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-sf-gold/20 text-sf-brown-dark dark:text-sf-gold">{activeCourse.orderLabel}</span>
+                    )}
                     <h1 className="text-lg sm:text-2xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{activeCourse.title}</h1>
+                    {activeCourse.difficulty && (
+                      <span className={cn("text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border", DIFFICULTY_CLASSES[activeCourse.difficulty] || DIFFICULTY_CLASSES.Default)}>
+                        {activeCourse.difficulty}
+                      </span>
+                    )}
                     {renderAttemptStatus()}
                   </div>
                   {activeCourse.description && <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{activeCourse.description}</p>}
@@ -756,7 +829,7 @@ export function TrainingView({ isAdmin, userId, displayName, currentRole, depart
                   )}
 
                   {activeCourse.sections.map((sec, idx) => {
-                    const meta = TYPE_ICON[sec.type] || TYPE_ICON.richtext;
+                    const meta = TYPE_ICON[sec.type] ?? TYPE_ICON.richtext!;
                     const Icon = meta.icon;
                     const isQuiz = sec.type === "quiz";
                     return (
@@ -897,13 +970,16 @@ function CourseFormModal({ course, departments, onClose, onSave }: {
   course: Course | null;
   departments: Department[];
   onClose: () => void;
-  onSave: (data: { title: string; description: string; departmentId: string | null; passmarkPct: number; expiryMonths: string }) => void;
+  onSave: (data: { title: string; description: string; departmentId: string | null; passmarkPct: number; expiryMonths: string; icon: string; difficulty: string; orderLabel: string }) => void;
 }) {
   const [title, setTitle] = useState(course?.title ?? "");
   const [description, setDescription] = useState(course?.description ?? "");
   const [departmentId, setDepartmentId] = useState<string>(course?.departmentId ?? "");
   const [passmarkPct, setPassmarkPct] = useState(course?.passmarkPct ?? 60);
   const [expiryMonths, setExpiryMonths] = useState(course?.expiryMonths ? String(course.expiryMonths) : "");
+  const [icon, setIcon] = useState(course?.icon ?? "");
+  const [difficulty, setDifficulty] = useState(course?.difficulty ?? "");
+  const [orderLabel, setOrderLabel] = useState(course?.orderLabel ?? "");
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-xs" onClick={onClose}>
@@ -915,14 +991,47 @@ function CourseFormModal({ course, departments, onClose, onSave }: {
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Title</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" autoFocus />
+          <div className="flex gap-3">
+            <div className="shrink-0">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Icon</label>
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-800">
+                {icon || <GraduationCap className="w-5 h-5 text-slate-400" />}
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Title</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" autoFocus />
+            </div>
           </div>
+
+          <div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mr-1">Quick:</span>
+              {ICON_PRESETS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setIcon(icon === e ? "" : e)}
+                  className={cn("w-7 h-7 rounded-lg text-base flex items-center justify-center border transition-all", icon === e ? "border-sf-gold bg-sf-gold/10 scale-110" : "border-transparent hover:bg-sf-cream dark:hover:bg-slate-800")}
+                >
+                  {e}
+                </button>
+              ))}
+              <input
+                type="text"
+                value={icon}
+                onChange={(e) => setIcon(e.target.value)}
+                placeholder="or type/paste"
+                className="w-24 px-2 py-1 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-xs"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm resize-none" />
           </div>
+
           <div>
             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Department</label>
             <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm">
@@ -930,6 +1039,21 @@ function CourseFormModal({ course, departments, onClose, onSave }: {
               {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Course order label</label>
+              <input type="text" value={orderLabel} onChange={(e) => setOrderLabel(e.target.value)} placeholder="e.g., 1, II, Module 3" className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Difficulty</label>
+              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full px-3 py-2 border border-sf-cream-dark dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sf-gold text-sm">
+                <option value="">Not set</option>
+                {DIFFICULTY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Pass mark (%)</label>
@@ -943,7 +1067,7 @@ function CourseFormModal({ course, departments, onClose, onSave }: {
         </div>
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-sf-cream-dark dark:border-slate-700">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400 font-medium hover:bg-sf-cream dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
-          <button onClick={() => onSave({ title: title.trim(), description, departmentId: departmentId || null, passmarkPct: Number(passmarkPct) || 0, expiryMonths })} disabled={!title.trim()} className="px-4 py-2 text-sm bg-sf-brown hover:bg-sf-brown-dark text-white font-medium rounded-lg transition-colors shadow-xs disabled:opacity-40">
+          <button onClick={() => onSave({ title: title.trim(), description, departmentId: departmentId || null, passmarkPct: Number(passmarkPct) || 0, expiryMonths, icon, difficulty, orderLabel })} disabled={!title.trim()} className="px-4 py-2 text-sm bg-sf-brown hover:bg-sf-brown-dark text-white font-medium rounded-lg transition-colors shadow-xs disabled:opacity-40">
             {course ? "Save Changes" : "Create Course"}
           </button>
         </div>

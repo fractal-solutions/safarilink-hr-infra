@@ -32,6 +32,9 @@ export interface Course {
   passmarkPct: number;
   tiers: CourseTier[];
   expiryMonths: number | null;
+  icon?: string | null;
+  difficulty?: string | null;
+  orderLabel?: string | null;
   sectionCount: number;
   ratingAvg?: number;
   ratingCount?: number;

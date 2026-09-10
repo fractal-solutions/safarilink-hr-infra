@@ -1199,6 +1199,9 @@ const server = serve({
           passmarkPct: c.passmark_pct ?? 60,
           tiers: (() => { try { return JSON.parse(c.tiers || "[]"); } catch { return []; } })(),
           expiryMonths: c.expiry_months,
+          icon: c.icon ?? null,
+          difficulty: c.difficulty ?? null,
+          orderLabel: c.order_label ?? null,
           sectionCount: countMap[c.id] || 0,
           ratingAvg: ratingMap[c.id]?.avg ?? 0,
           ratingCount: ratingMap[c.id]?.count ?? 0,
@@ -1219,15 +1222,29 @@ const server = serve({
         const maxOrder = (db.query("SELECT MAX(sort_order) AS m FROM courses").get() as any).m ?? -1;
         const tiers = JSON.stringify(Array.isArray(body.tiers) ? body.tiers : []);
         db.query(
-          `INSERT INTO courses (id, title, description, department_id, passmark_pct, tiers, expiry_months, sort_order, archived, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
-        ).run(id, title, body.description || "", body.departmentId || null, Number(body.passmarkPct) || 60, tiers, body.expiryMonths ?? null, maxOrder + 1, user.id, now, now);
+          `INSERT INTO courses (id, title, description, department_id, passmark_pct, tiers, expiry_months, icon, difficulty, order_label, sort_order, archived, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
+        ).run(id, title, body.description || "", body.departmentId || null, Number(body.passmarkPct) || 60, tiers, body.expiryMonths ?? null, body.icon || null, body.difficulty || null, body.orderLabel || null, maxOrder + 1, user.id, now, now);
         addAuditLog(null, user.id, "course_create", `Created course "${title}"`);
         return json({
           id, title, description: body.description || "", departmentId: body.departmentId || null,
           passmarkPct: Number(body.passmarkPct) || 60, tiers: body.tiers || [], expiryMonths: body.expiryMonths ?? null,
+          icon: body.icon || null, difficulty: body.difficulty || null, orderLabel: body.orderLabel || null,
           sectionCount: 0, archived: false, createdAt: now, updatedAt: now,
         }, 201);
+      },
+    },
+
+    "/api/courses/reorder": {
+      async PUT(req) {
+        const user = getSessionUser(req);
+        if (!user || user.role !== "admin") return forbidden();
+        const { order } = await readBody(req);
+        if (!Array.isArray(order)) return json({ error: "order array required" }, 400);
+        for (const item of order) {
+          db.query("UPDATE courses SET sort_order = ? WHERE id = ?").run(item.sort_order, item.id);
+        }
+        return json({ ok: true });
       },
     },
 
@@ -1253,6 +1270,9 @@ const server = serve({
           passmarkPct: row.passmark_pct ?? 60,
           tiers: (() => { try { return JSON.parse(row.tiers || "[]"); } catch { return []; } })(),
           expiryMonths: row.expiry_months,
+          icon: row.icon ?? null,
+          difficulty: row.difficulty ?? null,
+          orderLabel: row.order_label ?? null,
           sectionCount: sections.length,
           archived: !!row.archived,
           createdAt: row.created_at,
@@ -1285,7 +1305,7 @@ const server = serve({
         const body = await readBody(req);
         const now = new Date().toISOString();
         db.query(
-          `UPDATE courses SET title = ?, description = ?, department_id = ?, passmark_pct = ?, tiers = ?, expiry_months = ?, updated_at = ? WHERE id = ?`
+          `UPDATE courses SET title = ?, description = ?, department_id = ?, passmark_pct = ?, tiers = ?, expiry_months = ?, icon = ?, difficulty = ?, order_label = ?, updated_at = ? WHERE id = ?`
         ).run(
           typeof body.title === "string" && body.title.trim() ? body.title.trim() : course.title,
           body.description !== undefined ? body.description : course.description,
@@ -1293,6 +1313,9 @@ const server = serve({
           body.passmarkPct !== undefined ? Number(body.passmarkPct) : course.passmark_pct,
           Array.isArray(body.tiers) ? JSON.stringify(body.tiers) : course.tiers,
           body.expiryMonths !== undefined ? body.expiryMonths : course.expiry_months,
+          body.icon !== undefined ? (body.icon || null) : course.icon,
+          body.difficulty !== undefined ? (body.difficulty || null) : course.difficulty,
+          body.orderLabel !== undefined ? (body.orderLabel || null) : course.order_label,
           now, id
         );
         addAuditLog(null, user.id, "course_update", `Updated course "${course.title}"`);
@@ -2044,7 +2067,7 @@ const server = serve({
         const user = getSessionUser(req);
         if (!user) return unauthorized();
         const { id } = req.params;
-        const ann = db.query("SELECT id FROM announcements WHERE id = ?").get(id);
+        const ann = db.query("SELECT id FROM announcements WHERE id = ?").get(id) as any;
         if (!ann) return notFound();
         if (!userCanSeeAnnouncement(user, id)) return forbidden();
         const now = new Date().toISOString();
@@ -2064,7 +2087,7 @@ const server = serve({
         const user = getSessionUser(req);
         if (!user) return unauthorized();
         const { id } = req.params;
-        const ann = db.query("SELECT id FROM announcements WHERE id = ?").get(id);
+        const ann = db.query("SELECT id FROM announcements WHERE id = ?").get(id) as any;
         if (!ann) return notFound();
         if (!userCanSeeAnnouncement(user, id)) return forbidden();
         const { body, parentId } = await readBody(req);

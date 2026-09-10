@@ -468,6 +468,26 @@ db.exec(`
   );
 `);
 
+// Migration: course presentation fields (icon, difficulty, order label)
+try {
+  db.exec("ALTER TABLE courses ADD COLUMN icon TEXT");
+  console.log("Migration: added icon to courses");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration courses icon:", e.message);
+}
+try {
+  db.exec("ALTER TABLE courses ADD COLUMN difficulty TEXT");
+  console.log("Migration: added difficulty to courses");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration courses difficulty:", e.message);
+}
+try {
+  db.exec("ALTER TABLE courses ADD COLUMN order_label TEXT");
+  console.log("Migration: added order_label to courses");
+} catch (e: any) {
+  if (!e.message?.includes("duplicate column")) console.error("Migration courses order_label:", e.message);
+}
+
 // Migration: add media size setting to sections (used by video sections)
 try {
   db.exec("ALTER TABLE sections ADD COLUMN size TEXT NOT NULL DEFAULT 'large'");
